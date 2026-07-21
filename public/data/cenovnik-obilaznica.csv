@@ -1,0 +1,57 @@
+from,to,kat1a_rsd,kat1_rsd,kat2_rsd,kat3_rsd,kat4_rsd,kat1a_eur,kat1_eur,kat2_eur,kat3_eur,kat4_eur
+"petlja Batajnica","petlja Beograd",0,0,0,0,340,0,0,0,0,340
+"petlja Batajnica","petlja Surčin",0,0,0,0,460,0,0,0,0,460
+"petlja Batajnica","petlja Surčin Jug",0,0,0,0,580,0,0,0,0,580
+"petlja Batajnica","petlja Ostružnica",0,0,0,0,870,0,0,0,0,870
+"petlja Batajnica","petlja Orlovača",0,0,0,0,1350,0,0,0,0,1350
+"petlja Batajnica","petlja Avala",0,0,0,0,1740,0,0,0,0,1740
+"petlja Batajnica","petlja Bubanj Potok",0,0,0,0,1870,0,0,0,0,1870
+"petlja Beograd","petlja Batajnica",0,0,0,0,340,0,0,0,0,340
+"petlja Beograd","petlja Surčin",0,0,0,0,120,0,0,0,0,120
+"petlja Beograd","petlja Surčin Jug",0,0,0,0,240,0,0,0,0,240
+"petlja Beograd","petlja Ostružnica",0,0,0,0,530,0,0,0,0,530
+"petlja Beograd","petlja Orlovača",0,0,0,0,1010,0,0,0,0,1010
+"petlja Beograd","petlja Avala",0,0,0,0,1400,0,0,0,0,1400
+"petlja Beograd","petlja Bubanj Potok",0,0,0,0,1530,0,0,0,0,1530
+"petlja Surčin","petlja Batajnica",0,0,0,0,460,0,0,0,0,460
+"petlja Surčin","petlja Beograd",0,0,0,0,120,0,0,0,0,120
+"petlja Surčin","petlja Surčin Jug",0,0,0,0,120,0,0,0,0,120
+"petlja Surčin","petlja Ostružnica",0,0,0,0,410,0,0,0,0,410
+"petlja Surčin","petlja Orlovača",0,0,0,0,890,0,0,0,0,890
+"petlja Surčin","petlja Avala",0,0,0,0,1280,0,0,0,0,1280
+"petlja Surčin","petlja Bubanj Potok",0,0,0,0,1410,0,0,0,0,1410
+"petlja Surčin Jug","petlja Batajnica",0,0,0,0,580,0,0,0,0,580
+"petlja Surčin Jug","petlja Beograd",0,0,0,0,240,0,0,0,0,240
+"petlja Surčin Jug","petlja Surčin",0,0,0,0,120,0,0,0,0,120
+"petlja Surčin Jug","petlja Ostružnica",0,0,0,0,290,0,0,0,0,290
+"petlja Surčin Jug","petlja Orlovača",0,0,0,0,770,0,0,0,0,770
+"petlja Surčin Jug","petlja Avala",0,0,0,0,1160,0,0,0,0,1160
+"petlja Surčin Jug","petlja Bubanj Potok",0,0,0,0,1290,0,0,0,0,1290
+"petlja Ostružnica","petlja Batajnica",0,0,0,0,870,0,0,0,0,870
+"petlja Ostružnica","petlja Beograd",0,0,0,0,530,0,0,0,0,530
+"petlja Ostružnica","petlja Surčin",0,0,0,0,410,0,0,0,0,410
+"petlja Ostružnica","petlja Surčin Jug",0,0,0,0,290,0,0,0,0,290
+"petlja Ostružnica","petlja Orlovača",0,0,0,0,480,0,0,0,0,480
+"petlja Ostružnica","petlja Avala",0,0,0,0,870,0,0,0,0,870
+"petlja Ostružnica","petlja Bubanj Potok",0,0,0,0,1000,0,0,0,0,1000
+"petlja Orlovača","petlja Batajnica",0,0,0,0,1350,0,0,0,0,1350
+"petlja Orlovača","petlja Beograd",0,0,0,0,1010,0,0,0,0,1010
+"petlja Orlovača","petlja Surčin",0,0,0,0,890,0,0,0,0,890
+"petlja Orlovača","petlja Surčin Jug",0,0,0,0,770,0,0,0,0,770
+"petlja Orlovača","petlja Ostružnica",0,0,0,0,480,0,0,0,0,480
+"petlja Orlovača","petlja Avala",0,0,0,0,390,0,0,0,0,390
+"petlja Orlovača","petlja Bubanj Potok",0,0,0,0,520,0,0,0,0,520
+"petlja Avala","petlja Batajnica",0,0,0,0,1740,0,0,0,0,1740
+"petlja Avala","petlja Beograd",0,0,0,0,1400,0,0,0,0,1400
+"petlja Avala","petlja Surčin",0,0,0,0,1280,0,0,0,0,1280
+"petlja Avala","petlja Surčin Jug",0,0,0,0,1160,0,0,0,0,1160
+"petlja Avala","petlja Ostružnica",0,0,0,0,870,0,0,0,0,870
+"petlja Avala","petlja Orlovača",0,0,0,0,390,0,0,0,0,390
+"petlja Avala","petlja Bubanj Potok",0,0,0,0,130,0,0,0,0,130
+"petlja Bubanj Potok","petlja Batajnica",0,0,0,0,1870,0,0,0,0,1870
+"petlja Bubanj Potok","petlja Beograd",0,0,0,0,1530,0,0,0,0,1530
+"petlja Bubanj Potok","petlja Surčin",0,0,0,0,1410,0,0,0,0,1410
+"petlja Bubanj Potok","petlja Surčin Jug",0,0,0,0,1290,0,0,0,0,1290
+"petlja Bubanj Potok","petlja Ostružnica",0,0,0,0,1000,0,0,0,0,1000
+"petlja Bubanj Potok","petlja Orlovača",0,0,0,0,520,0,0,0,0,520
+"petlja Bubanj Potok","petlja Avala",0,0,0,0,130,0,0,0,0,130

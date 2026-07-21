@@ -1,0 +1,700 @@
+{
+  "source": "https://www.putevi-srbije.rs/index.php/mapa-naplatnih-stanica-1",
+  "extractedAt": "2026-07-15T12:18:56.775Z",
+  "count": 77,
+  "stations": [
+    {
+      "id": "54",
+      "name": "NS Adaševci",
+      "lat": 45.0501133,
+      "lng": 19.209708,
+      "road": "Auto-put A3",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "29",
+      "name": "NS Aleksinac",
+      "lat": 43.5261508,
+      "lng": 21.7219636,
+      "road": "Auto-put A1",
+      "city": "Aleksinac",
+      "country": "Srbija"
+    },
+    {
+      "id": "28",
+      "name": "NS Aleksinački Rudnici",
+      "lat": 43.5515203,
+      "lng": 21.6885855,
+      "road": "Auto-put A1",
+      "city": "Aleksinački Rudnici",
+      "country": "Srbija"
+    },
+    {
+      "id": "3",
+      "name": "NS Bačka Topola",
+      "lat": 45.8232203,
+      "lng": 19.6849777,
+      "road": "Auto-put A1",
+      "city": "Bačka Topola",
+      "country": "Srbija"
+    },
+    {
+      "id": "23",
+      "name": "NS Batočina",
+      "lat": 44.1503107,
+      "lng": 21.1123471,
+      "road": "Auto-put A1",
+      "city": "Kragujevac",
+      "country": "Srbija"
+    },
+    {
+      "id": "60",
+      "name": "NS Bela Palanka",
+      "lat": 43.2337276,
+      "lng": 22.3165,
+      "road": "Auto-put A4",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "13",
+      "name": "NS Beograd",
+      "lat": 44.6643328,
+      "lng": 20.6121724,
+      "road": "Auto-put A1",
+      "city": "Vrčin",
+      "country": "Srbija"
+    },
+    {
+      "id": "10",
+      "name": "NS Beška",
+      "lat": 45.1351689,
+      "lng": 20.0903017,
+      "road": "Auto-put A1",
+      "city": "Beška",
+      "country": "Srbija"
+    },
+    {
+      "id": "33",
+      "name": "NS Brestovac",
+      "lat": 43.1498819,
+      "lng": 21.8926074,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "41",
+      "name": "NS Bujanovac jug",
+      "lat": 42.4531394,
+      "lng": 21.7776145,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "40",
+      "name": "NS Bujanovac sever",
+      "lat": 42.466845,
+      "lng": 21.8086596,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "49",
+      "name": "NS Čačak (Pakovraće)",
+      "lat": 43.9031025,
+      "lng": 20.2616419,
+      "road": "Auto-put A2",
+      "city": "Čačak",
+      "country": "Srbija"
+    },
+    {
+      "id": "64",
+      "name": "NS Ćićevac",
+      "lat": 43.7227547,
+      "lng": 21.4208331,
+      "road": "Auto-put A5",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "25",
+      "name": "NS Ćuprija",
+      "lat": 43.9379759,
+      "lng": 21.3900548,
+      "road": "Auto-put A1",
+      "city": "Ćuprija",
+      "country": "Srbija"
+    },
+    {
+      "id": "63",
+      "name": "NS Dimitrovgrad",
+      "lat": 43.0219083,
+      "lng": 22.7364149,
+      "road": "Auto-put A4",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "32",
+      "name": "NS Doljevac Selo",
+      "lat": 43.1932409,
+      "lng": 21.8502504,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "4",
+      "name": "NS Feketić",
+      "lat": 45.6402133,
+      "lng": 19.7145919,
+      "road": "Auto-put A1",
+      "city": "Feketić",
+      "country": "Srbija"
+    },
+    {
+      "id": "36",
+      "name": "NS Grdelica",
+      "lat": 42.8862461,
+      "lng": 22.0684915,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "69",
+      "name": "NS Hrtkovci",
+      "lat": 44.8595055,
+      "lng": 19.7747472,
+      "road": "Auto-put A8",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "11",
+      "name": "NS Inđija",
+      "lat": 45.069987,
+      "lng": 20.147843,
+      "road": "Auto-put A1",
+      "city": "Inđija",
+      "country": "Srbija"
+    },
+    {
+      "id": "24",
+      "name": "NS Jagodina",
+      "lat": 43.9989469,
+      "lng": 21.2662846,
+      "road": "Auto-put A1",
+      "city": "Jagodina",
+      "country": "Srbija"
+    },
+    {
+      "id": "17",
+      "name": "NS Kolari",
+      "lat": 44.5770234,
+      "lng": 20.8876602,
+      "road": "Auto-put A1",
+      "city": "Kolari",
+      "country": "Srbija"
+    },
+    {
+      "id": "67",
+      "name": "NS Koševi",
+      "lat": 43.5878969,
+      "lng": 21.25298,
+      "road": "Auto-put A5",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "8",
+      "name": "NS Kovilj",
+      "lat": 45.2405783,
+      "lng": 20.0347076,
+      "road": "Auto-put A1",
+      "city": "Kovilj",
+      "country": "Srbija"
+    },
+    {
+      "id": "65",
+      "name": "NS Kruševac istok",
+      "lat": 43.605255224579075,
+      "lng": 21.334327689443647,
+      "road": "Auto-put A5",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "66",
+      "name": "NS Kruševac zapad",
+      "lat": 43.6078634,
+      "lng": 21.3083408,
+      "road": "Auto-put A5",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "53",
+      "name": "NS Kuzmin",
+      "lat": 45.0356639,
+      "lng": 19.3862195,
+      "road": "Auto-put A3",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "45",
+      "name": "NS Lajkovac",
+      "lat": 44.3598096,
+      "lng": 20.1309312,
+      "road": "Auto-put A2",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "22",
+      "name": "NS Lapovo",
+      "lat": 44.1846523,
+      "lng": 21.1101252,
+      "road": "Auto-put A1",
+      "city": "Lapovo",
+      "country": "Srbija"
+    },
+    {
+      "id": "34",
+      "name": "NS Leskovac centar",
+      "lat": 43.0900373,
+      "lng": 21.9383605,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "35",
+      "name": "NS Leskovac jug",
+      "lat": 42.9706911,
+      "lng": 22.0325791,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "46",
+      "name": "NS Ljig",
+      "lat": 44.2306724,
+      "lng": 20.2492917,
+      "road": "Auto-put A2",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "gen-5",
+      "name": "NS Lučani",
+      "lat": 43.83675818661708,
+      "lng": 20.156942146000556,
+      "road": "Auto-put A2",
+      "city": "Lučani",
+      "country": "Srbija"
+    },
+    {
+      "id": "57",
+      "name": "NS Malča",
+      "lat": 43.31918,
+      "lng": 22.0198772,
+      "road": "Auto-put A4",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "14",
+      "name": "NS Mali Požarevac",
+      "lat": 44.5630314,
+      "lng": 20.6693924,
+      "road": "Auto-put A1",
+      "city": "Mali Požarevac",
+      "country": "Srbija"
+    },
+    {
+      "id": "9",
+      "name": "NS Maradik",
+      "lat": 45.0994678,
+      "lng": 20.1029961,
+      "road": "Auto-put A1",
+      "city": "Maradik",
+      "country": "Srbija"
+    },
+    {
+      "id": "21",
+      "name": "NS Markovac",
+      "lat": 44.2394907,
+      "lng": 21.1166753,
+      "road": "Auto-put A1",
+      "city": "Markovac",
+      "country": "Srbija"
+    },
+    {
+      "id": "31",
+      "name": "NS Merošina",
+      "lat": 43.2792991,
+      "lng": 21.7981389,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "55",
+      "name": "NS Morović",
+      "lat": 45.0460388,
+      "lng": 19.2102103,
+      "road": "Auto-put A3",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "58",
+      "name": "NS Niš istok",
+      "lat": 43.3421859,
+      "lng": 21.9363022,
+      "road": "Auto-put A4",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "30",
+      "name": "NS Niš jug",
+      "lat": 43.3275294,
+      "lng": 21.8156602,
+      "road": "Auto-put A1",
+      "city": "Niš",
+      "country": "Srbija"
+    },
+    {
+      "id": "59",
+      "name": "NS Niš sever",
+      "lat": 43.3498023,
+      "lng": 21.8580036,
+      "road": "Auto-put A4",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "7",
+      "name": "NS Novi Sad jug",
+      "lat": 45.2882555,
+      "lng": 19.8910168,
+      "road": "Auto-put A1",
+      "city": "Novi Sad",
+      "country": "Srbija"
+    },
+    {
+      "id": "71",
+      "name": "NS Novi Sad sever",
+      "lat": 45.3134231,
+      "lng": 19.7998316,
+      "road": "Auto-put A1",
+      "city": "Novi Sad",
+      "country": "Srbija"
+    },
+    {
+      "id": "43",
+      "name": "NS Obrenovac",
+      "lat": 44.5715635,
+      "lng": 20.1905325,
+      "road": "Auto-put A2",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "26",
+      "name": "NS Paraćin",
+      "lat": 43.8560576,
+      "lng": 21.4334559,
+      "road": "Auto-put A1",
+      "city": "Paraćin",
+      "country": "Srbija"
+    },
+    {
+      "id": "51",
+      "name": "NS Pećinci",
+      "lat": 44.9187889,
+      "lng": 19.9530736,
+      "road": "Auto-put A3",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "62",
+      "name": "NS Pirot istok",
+      "lat": 43.1235771,
+      "lng": 22.61865,
+      "road": "Auto-put A4",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "61",
+      "name": "NS Pirot zapad",
+      "lat": 43.1883459,
+      "lng": 22.5665577,
+      "road": "Auto-put A4",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "19",
+      "name": "NS Požarevac",
+      "lat": 44.5799914,
+      "lng": 20.9825685,
+      "road": "Auto-put A1",
+      "city": "Požarevac",
+      "country": "Srbija"
+    },
+    {
+      "id": "37",
+      "name": "NS Predejane",
+      "lat": 42.8204261,
+      "lng": 22.1238273,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "48",
+      "name": "NS Preljina",
+      "lat": 43.9173205,
+      "lng": 20.4005788,
+      "road": "Auto-put A2",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "42",
+      "name": "NS Preševo",
+      "lat": 42.3026234,
+      "lng": 21.7096273,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "gen-6",
+      "name": "NS Prilipac",
+      "lat": 43.8245042889927,
+      "lng": 20.083435983189773,
+      "road": "Auto-put A2",
+      "city": "Prilipac",
+      "country": "Srbija"
+    },
+    {
+      "id": "27",
+      "name": "NS Ražanj",
+      "lat": 43.6841398,
+      "lng": 21.5460942,
+      "road": "Auto-put A1",
+      "city": "Ražanj",
+      "country": "Srbija"
+    },
+    {
+      "id": "68",
+      "name": "NS Ruma",
+      "lat": 44.9692038,
+      "lng": 19.8087058,
+      "road": "Auto-put A8",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "70",
+      "name": "NS Šabac",
+      "lat": 44.8082839,
+      "lng": 19.7188302,
+      "road": "Auto-put A8",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "56",
+      "name": "NS Šid",
+      "lat": 45.048643,
+      "lng": 19.19245,
+      "road": "Auto-put A3",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "50",
+      "name": "NS Šimanovci",
+      "lat": 44.8822256,
+      "lng": 20.1137982,
+      "road": "Auto-put A3",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "18",
+      "name": "NS Smederevo",
+      "lat": 44.5899553,
+      "lng": 20.9573221,
+      "road": "Auto-put A1",
+      "city": "Smederevo",
+      "country": "Srbija"
+    },
+    {
+      "id": "52",
+      "name": "NS Sremska Mitrovica",
+      "lat": 44.9954043,
+      "lng": 19.6450541,
+      "road": "Auto-put A3",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "12",
+      "name": "NS Stara Pazova",
+      "lat": 45.006628,
+      "lng": 20.201475,
+      "road": "Auto-put A1",
+      "city": "Stara Pazova",
+      "country": "Srbija"
+    },
+    {
+      "id": "1",
+      "name": "NS Subotica",
+      "lat": 46.0210829,
+      "lng": 19.7339334,
+      "road": "Auto-put A1",
+      "city": "Bikovo",
+      "country": "Srbija"
+    },
+    {
+      "id": "47",
+      "name": "NS Takovo",
+      "lat": 44.0437403,
+      "lng": 20.3817187,
+      "road": "Auto-put A2",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "72",
+      "name": "NS Trstenik",
+      "lat": 43.61946325493339,
+      "lng": 21.022275560382546,
+      "road": "Auti-put A5",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "44",
+      "name": "NS Ub",
+      "lat": 44.4548101,
+      "lng": 20.1216655,
+      "road": "Auto-put A2",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "15",
+      "name": "NS Umčari",
+      "lat": 44.5745164,
+      "lng": 20.7464819,
+      "road": "Auto-put A1",
+      "city": "Umčari",
+      "country": "Srbija"
+    },
+    {
+      "id": "74",
+      "name": "NS Velika Drenova",
+      "lat": 43.61528103277899,
+      "lng": 21.171779291643762,
+      "road": "Auti-put A5",
+      "city": null,
+      "country": null
+    },
+    {
+      "id": "20",
+      "name": "NS Velika Plana",
+      "lat": 44.33913,
+      "lng": 21.0800546,
+      "road": "Auto-put A1",
+      "city": "Velika Plana",
+      "country": "Srbija"
+    },
+    {
+      "id": "38",
+      "name": "NS Vladičin Han",
+      "lat": 42.7035091,
+      "lng": 22.0724971,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "16",
+      "name": "NS Vodanj",
+      "lat": 44.5851547,
+      "lng": 20.8191337,
+      "road": "Auto-put A1",
+      "city": "Vodanj",
+      "country": "Srbija"
+    },
+    {
+      "id": "39",
+      "name": "NS Vranje",
+      "lat": 42.5441182,
+      "lng": 21.9280924,
+      "road": "Auto-put A1",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "75",
+      "name": "NS Vrba",
+      "lat": 43.70156092667137,
+      "lng": 20.778613753516606,
+      "road": "Auti-put A5",
+      "city": null,
+      "country": null
+    },
+    {
+      "id": "5",
+      "name": "NS Vrbas",
+      "lat": 45.5552904,
+      "lng": 19.7220427,
+      "road": "Auto-put A1",
+      "city": "Vrbas",
+      "country": "Srbija"
+    },
+    {
+      "id": "73",
+      "name": "NS Vrnjačka Banja",
+      "lat": 43.64926817300584,
+      "lng": 20.911321467194675,
+      "road": "Auti-put A5",
+      "city": null,
+      "country": null
+    },
+    {
+      "id": "2",
+      "name": "NS Žednik",
+      "lat": 45.9346166,
+      "lng": 19.7077494,
+      "road": "Auto-put A1",
+      "city": "Žednik",
+      "country": "Srbija"
+    },
+    {
+      "id": "6",
+      "name": "NS Zmajevo",
+      "lat": 45.4420734,
+      "lng": 19.7353658,
+      "road": "Auto-put A1",
+      "city": "Zmajevo",
+      "country": "Srbija"
+    }
+  ]
+}

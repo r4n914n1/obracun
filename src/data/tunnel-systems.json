@@ -1,0 +1,31 @@
+{
+  "note": "Poznati tunelski operateri / nazivi koje HERE često vraća bez reči „tunnel“. Dodaj nove ako se pogrešno klasifikuju.",
+  "operators": [
+    "SITAF",
+    "SFTRF",
+    "ATMB",
+    "TMB",
+    "Traforo del Frejus",
+    "Traforo del Monte Bianco",
+    "Tunnel du Frejus",
+    "Tunnel du Mont Blanc",
+    "Monte Bianco",
+    "Mont Blanc",
+    "Karawanken",
+    "Karavanke",
+    "Karawankentunnel",
+    "Tauerntunnel",
+    "Tauern Tunnel",
+    "Gotthard",
+    "San Gottardo",
+    "Arlberg",
+    "Brenner",
+    "Vielha",
+    "Gran San Bernardo",
+    "Great St Bernard",
+    "Munt la Schera",
+    "Vereina",
+    "Liefkenshoek",
+    "Westerschelde"
+  ]
+}

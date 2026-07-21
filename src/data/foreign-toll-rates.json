@@ -1,0 +1,23 @@
+{
+  "note": "Po zemlji: tollDiscount i tunnelDiscount default 0; korisnik može da menja i čuva se lokalno. vat = PDV % (kamioni).",
+  "appliesToCarsToo": false,
+  "countries": {
+    "ITA": { "vat": 22, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "FRA": { "vat": 20, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "ESP": { "vat": 21, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "PRT": { "vat": 23, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "AUT": { "vat": 20, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "DEU": { "vat": 0, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "BEL": { "vat": 21, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "POL": { "vat": 23, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "HUN": { "vat": 27, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "HRV": { "vat": 25, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "SVN": { "vat": 22, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "BGR": { "vat": 20, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "ROU": { "vat": 19, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "MKD": { "vat": 18, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "MNE": { "vat": 21, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "GRC": { "vat": 24, "tollDiscount": 0, "tunnelDiscount": 0 },
+    "TUR": { "vat": 20, "tollDiscount": 0, "tunnelDiscount": 0 }
+  }
+}
