@@ -4,6 +4,7 @@ import { PricingPage } from './components/PricingPage'
 import { RouteForm } from './components/RouteForm'
 import { ResultPanel } from './components/ResultPanel'
 import { RouteMap } from './components/RouteMap'
+import { LanguageToggle } from './components/LanguageToggle'
 import {
   isAuthenticated,
   logout,
@@ -25,7 +26,11 @@ import {
   latestIso,
   requestTollSync,
 } from './services/syncToll'
-import { openBugReportMail } from './services/bugReport'
+import { BugReportButton } from './components/BugReportButton'
+import { fetchQuota, confirmPayPalCheckout, recordCalculationUsage } from './services/billing'
+import { isFirebaseConfigured } from './services/firebase'
+import { useLocale } from './i18n/LocaleContext'
+import type { QuotaSnapshot } from './types/billing'
 import type {
   EmissionClass,
   ForeignTollRates,
@@ -45,9 +50,9 @@ import {
 } from './types'
 import naplatneStaniceMeta from './data/naplatne-stanice.json'
 import cenovnikMeta from './data/cenovnik-putarine.json'
-import { APP_DISCLAIMER } from './data/disclaimer'
 
 export default function App() {
+  const { t, numberLocale, ready: localeReady } = useLocale()
   const [authReady, setAuthReady] = useState(false)
   const [authed, setAuthed] = useState(false)
   const [screen, setScreen] = useState<'app' | 'pricing'>('app')
@@ -88,6 +93,85 @@ export default function App() {
       (cenovnikMeta as { extractedAt?: string }).extractedAt,
     ),
   )
+  const [quota, setQuota] = useState<QuotaSnapshot | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  async function refreshQuota(): Promise<void> {
+    if (!isFirebaseConfigured() || !isAuthenticated()) return
+    try {
+      const next = await fetchQuota()
+      setQuota(next)
+    } catch {
+      // Billing functions may not be deployed yet.
+    }
+  }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const checkout = params.get('checkout')
+    if (!checkout) return
+
+    if (checkout === 'success') {
+      const subscriptionId = params.get('subscription_id')
+      sessionStorage.setItem(
+        'paypalCheckout',
+        subscriptionId ? `sub:${subscriptionId}` : 'success',
+      )
+    } else if (checkout === 'cancel') {
+      setNotice(t('checkoutCancel'))
+    }
+
+    params.delete('checkout')
+    params.delete('subscription_id')
+    params.delete('ba_token')
+    params.delete('token')
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}`
+    window.history.replaceState({}, '', next)
+  }, [t])
+
+  useEffect(() => {
+    if (!authReady || !authed) return
+
+    const pending = sessionStorage.getItem('paypalCheckout')
+    const recoverKey = 'paypalConfirmAttempted'
+    const shouldRecover = !pending && !sessionStorage.getItem(recoverKey)
+    if (!pending && !shouldRecover) return
+
+    let cancelled = false
+    void (async () => {
+      const subscriptionId =
+        pending?.startsWith('sub:') ? pending.slice(4) : undefined
+
+      if (pending) {
+        sessionStorage.removeItem('paypalCheckout')
+      } else {
+        sessionStorage.setItem(recoverKey, '1')
+      }
+
+      try {
+        const next = await confirmPayPalCheckout(subscriptionId)
+        if (cancelled) return
+        if (next.plan === 'subscribed') {
+          setQuota(next)
+          if (next.queuedPlanId) {
+            setNotice(t('checkoutQueuedSuccess'))
+          } else if (pending) {
+            setNotice(t('checkoutSuccess'))
+          } else {
+            setNotice(t('checkoutSuccess'))
+          }
+        }
+      } catch {
+        if (pending && !cancelled) {
+          await refreshQuota()
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authReady, authed, t])
 
   useEffect(() => {
     let cancelled = false
@@ -99,6 +183,7 @@ export default function App() {
       if (ok) {
         const rates = await loadTollRatesForUser()
         if (!cancelled) setTollRates(rates)
+        await refreshQuota()
       }
       setAuthReady(true)
     })()
@@ -136,12 +221,15 @@ export default function App() {
     setLoading(true)
     setError(null)
 
-    // Povratak: A → stopovi → B → A (B kao via, destinacija = A)
     const routeOrigin = from
     const routeDestination = roundTrip ? from : to
     const routeVias = roundTrip ? [...via, to] : via
 
     try {
+      if (quota && !quota.canCalculate) {
+        throw new Error(t('quotaExhausted'))
+      }
+
       const [result, rate] = await Promise.all([
         fetchRoute(routeOrigin, routeDestination, routeVias, vehicleMode, {
           emissionClass,
@@ -159,11 +247,24 @@ export default function App() {
       setRoute(result)
       setToll(tollEstimate)
       setExchangeRateLabel(
-        `Kurs NBS danas: 1 € = ${rate.rsdPerEur.toFixed(2)} RSD (${rate.date})`,
+        t('exchangeRate', {
+          rate: rate.rsdPerEur.toFixed(2),
+          date: rate.date,
+        }),
       )
+
+      if (isFirebaseConfigured()) {
+        try {
+          const nextQuota = await recordCalculationUsage()
+          setQuota(nextQuota)
+        } catch (usageErr: unknown) {
+          clearRouteResults()
+          throw usageErr
+        }
+      }
     } catch (err: unknown) {
       clearRouteResults()
-      setError(err instanceof Error ? err.message : 'Nešto nije uspelo. Probaj ponovo.')
+      setError(err instanceof Error ? err.message : t('genericError'))
     } finally {
       setLoading(false)
     }
@@ -186,9 +287,7 @@ export default function App() {
       const geocoded = await geocodeAddresses(labels)
       const unique = dedupeNearbyLocations(geocoded)
       if (unique.length < 2) {
-        throw new Error(
-          'Posle geokodiranja ostala je manje od 2 različite tačke. Proveri CSV.',
-        )
+        throw new Error(t('csvGeocodeFew'))
       }
 
       const nextOrigin = unique[0]
@@ -200,11 +299,7 @@ export default function App() {
       setStops(nextStops)
       await calculateRoute(nextOrigin, nextDestination, nextStops)
     } catch (err: unknown) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Učitavanje CSV nije uspelo. Proveri format fajla.',
-      )
+      setError(err instanceof Error ? err.message : t('csvImportFailed'))
     } finally {
       setImporting(false)
     }
@@ -224,9 +319,7 @@ export default function App() {
       }, 900)
     } catch (err: unknown) {
       setSyncMessage(
-        err instanceof Error
-          ? err.message
-          : 'SYNC nije uspeo. Radi samo uz npm run dev.',
+        err instanceof Error ? err.message : t('syncFailed'),
       )
     } finally {
       setSyncing(false)
@@ -252,12 +345,13 @@ export default function App() {
       ? fuelCost + serbiaTollEur + foreignTollEur + driverFee + operatingCost
       : null
 
-  if (!authReady) {
+  if (!localeReady || !authReady) {
     return (
       <div className="login-screen">
         <div className="login-card">
-          <div className="login-brand">Obračun</div>
-          <p className="login-sub">Učitavam sesiju…</p>
+          <h1 className="login-brand">{t('brand')}</h1>
+          <p className="login-tagline">{t('brandTagline')}</p>
+          <p className="login-sub">{t('loadingSession')}</p>
         </div>
       </div>
     )
@@ -269,6 +363,10 @@ export default function App() {
         <PricingPage
           onBack={() => setScreen('app')}
           showLoginHint={!authed}
+          isAuthenticated={authed}
+          quota={quota}
+          onRequireLogin={() => setScreen('app')}
+          onQuotaChange={setQuota}
         />
       </div>
     )
@@ -280,6 +378,7 @@ export default function App() {
         onSuccess={() => {
           setAuthed(true)
           void refreshTollRatesFromAccount()
+          void refreshQuota()
         }}
         onOpenPricing={() => setScreen('pricing')}
       />
@@ -291,24 +390,18 @@ export default function App() {
       <header className="app-header">
         <div className="app-header-row">
           <div>
-            <h1>Koliko ću platiti putarinu?</h1>
-            <p>Levo unos · sredina mapa · desno rezultat</p>
+            <h1>{t('appTitle')}</h1>
+            <p>{t('appSubtitle')}</p>
           </div>
           <div className="app-header-actions">
-            <button
-              type="button"
-              className="btn btn-logout"
-              onClick={() => openBugReportMail()}
-              title="Pošalji prijavu greške na e-mail"
-            >
-              Bug report
-            </button>
+            <LanguageToggle />
+            <BugReportButton className="btn btn-logout" title={t('bugReportTitle')} />
             <button
               type="button"
               className="btn btn-logout"
               onClick={() => setScreen('pricing')}
             >
-              Pretplata
+              {t('pricingNav')}
             </button>
             <button
               type="button"
@@ -317,16 +410,37 @@ export default function App() {
                 void (async () => {
                   await logout()
                   setAuthed(false)
+                  setQuota(null)
                   setScreen('app')
                   setTollRates(defaultForeignTollRates())
                 })()
               }}
             >
-              Odjavi se
+              {t('logout')}
             </button>
           </div>
         </div>
-        <p className="app-disclaimer">{APP_DISCLAIMER}</p>
+        {quota ? (
+          <p className="app-quota">
+            {t('quotaLabel', {
+              remaining: quota.remaining,
+              limit: quota.limit,
+            })}
+            {quota.plan === 'subscribed' && quota.periodEnd
+              ? ` · ${t('quotaUntil', {
+                  date: new Date(quota.periodEnd).toLocaleDateString(
+                    numberLocale,
+                    { dateStyle: 'medium' },
+                  ),
+                })}`
+              : ''}
+            {quota.cancelAtPeriodEnd
+              ? ` · ${t('subscriptionCancelledPending')}`
+              : ''}
+          </p>
+        ) : null}
+        {notice ? <p className="app-notice">{notice}</p> : null}
+        <p className="app-disclaimer">{t('disclaimer')}</p>
       </header>
 
       <main className="app-main">
@@ -420,22 +534,20 @@ export default function App() {
 
           {error ? (
             <div className="status status-error" role="alert">
-              <strong>Ups!</strong> {error}
+              <strong>{t('oops')}</strong> {error}
             </div>
           ) : null}
 
           {loading ? (
-            <div className="status status-loading">Računam rutu i putarinu…</div>
+            <div className="status status-loading">{t('calculating')}</div>
           ) : null}
           {importing ? (
-            <div className="status status-loading">
-              Učitavam izveštaj i geokodiram tačke…
-            </div>
+            <div className="status status-loading">{t('importingStatus')}</div>
           ) : null}
         </aside>
 
         <section className="map-panel">
-          <div className="map-caption">Mapa rute (plava linija = tvoj put)</div>
+          <div className="map-caption">{t('mapCaption')}</div>
           <RouteMap
             origin={origin}
             destination={destination}
@@ -449,7 +561,7 @@ export default function App() {
           {route && toll && grandTotal !== null ? (
             <ResultPanel
               grandTotal={grandTotal}
-              categoryLabel={toll.categoryLabel}
+              categoryCode={toll.category}
               distanceMeters={route.distanceMeters}
               durationSeconds={route.durationSeconds}
               liters={liters}
@@ -472,8 +584,8 @@ export default function App() {
             />
           ) : (
             <div className="result-placeholder">
-              <strong>Ovde izlazi rezultat</strong>
-              <p>Popuni rutu levo i pritisni IZRAČUNAJ.</p>
+              <strong>{t('resultPlaceholderTitle')}</strong>
+              <p>{t('resultPlaceholderBody')}</p>
             </div>
           )}
         </aside>
@@ -488,12 +600,12 @@ export default function App() {
             onClick={() => {
               void handleSyncToll()
             }}
-            title="Preuzmi stanice i cene sa Putevi Srbije (samo lokalno)"
+            title={t('syncTitle')}
           >
             {syncing ? 'SYNC…' : 'SYNC'}
           </button>
           <span className="sync-time" title={lastSyncAt ?? undefined}>
-            Poslednji sync: {formatSyncTime(lastSyncAt)}
+            {t('lastSync')} {formatSyncTime(lastSyncAt)}
           </span>
           {syncMessage ? <span className="sync-message">{syncMessage}</span> : null}
         </div>

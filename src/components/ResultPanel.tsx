@@ -6,9 +6,10 @@ import type {
 } from '../services/tollEstimate'
 import type { ForeignTollSummary, RouteLeg } from '../types'
 import { haversineMeters } from '../services/geo'
-import { APP_DISCLAIMER } from '../data/disclaimer'
+import { useLocale } from '../i18n/LocaleContext'
+import type { MessageKey } from '../i18n/messages'
 
-const COUNTRY_NAMES: Record<string, string> = {
+const COUNTRY_FALLBACK: Record<string, string> = {
   SRB: 'Srbija',
   HRV: 'Hrvatska',
   HUN: 'Mađarska',
@@ -32,25 +33,12 @@ const COUNTRY_NAMES: Record<string, string> = {
   XKX: 'Kosovo',
 }
 
-function countryName(code: string): string {
-  return COUNTRY_NAMES[code] ?? code
-}
-
 function formatEur(amount: number): string {
   return `${amount.toFixed(2)} €`
 }
 
 function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`
-}
-
-function formatDuration(seconds: number): string {
-  const totalMinutes = Math.round(seconds / 60)
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-  if (hours === 0) return `${minutes} min`
-  if (minutes === 0) return `${hours} h`
-  return `${hours} h ${minutes} min`
 }
 
 function routeLegLabelOf(leg: RouteLeg): string {
@@ -121,7 +109,6 @@ function serbiaProgress(
     if (hit) return hit.distanceAlongRoute
   }
   if (routeLeg && routeLeg.coordinates.length >= 2) {
-    // Fallback: start of this itinerary segment
     return legOffset
   }
   return legOffset
@@ -141,12 +128,12 @@ function foreignProgress(
   )
 }
 
-/** Build one continuous list: route legs in travel order, SRB + foreign interleaved. */
 function buildChronologicalGroups(
   routeLegs: RouteLeg[],
   paidLegs: PaidTollLeg[],
   foreignFares: AdjustedFare[],
   detected: DetectedTollStation[],
+  unknownLegLabel: string,
 ): ChronoGroup[] {
   const legByLabel = new Map<string, { leg: RouteLeg; offset: number; index: number }>()
   let offset = 0
@@ -203,8 +190,8 @@ function buildChronologicalGroups(
   for (const item of items) {
     const label =
       item.kind === 'serbia'
-        ? item.leg.routeLegLabel ?? 'Nepoznat deo rute'
-        : item.fare.routeLegLabel ?? 'Nepoznat deo rute'
+        ? item.leg.routeLegLabel ?? unknownLegLabel
+        : item.fare.routeLegLabel ?? unknownLegLabel
     let group = byLabel.get(label)
     if (!group) {
       group = { legLabel: label, items: [], totalEur: 0 }
@@ -220,7 +207,6 @@ function buildChronologicalGroups(
     group.totalEur = Math.round(group.totalEur * 100) / 100
   }
 
-  // Prefer route-leg order for headers; append leftovers.
   const ordered: ChronoGroup[] = []
   const used = new Set<string>()
   for (const leg of routeLegs) {
@@ -243,7 +229,7 @@ function buildChronologicalGroups(
 
 interface ResultPanelProps {
   grandTotal: number
-  categoryLabel: string
+  categoryCode: string
   distanceMeters: number
   durationSeconds: number
   liters: number
@@ -286,9 +272,16 @@ function SummaryRow({
   )
 }
 
+const CATEGORY_KEYS: Record<string, MessageKey> = {
+  '1': 'cat1',
+  '2': 'cat2',
+  '3': 'cat3',
+  '4': 'cat4',
+}
+
 export function ResultPanel({
   grandTotal,
-  categoryLabel,
+  categoryCode,
   distanceMeters,
   durationSeconds,
   liters,
@@ -309,19 +302,39 @@ export function ResultPanel({
   routeLegs,
   exchangeRateLabel,
 }: ResultPanelProps) {
+  const { t, countryName } = useLocale()
   const tollTotal = serbiaTollEur + foreignTollEur
+
+  function formatDuration(seconds: number): string {
+    const totalMinutes = Math.round(seconds / 60)
+    const hours = Math.floor(totalMinutes / 60)
+    const minutes = totalMinutes % 60
+    if (hours === 0) return `${minutes} ${t('min')}`
+    if (minutes === 0) return `${hours} ${t('hour')}`
+    return `${hours} ${t('hour')} ${minutes} ${t('min')}`
+  }
+
   const chronoGroups = buildChronologicalGroups(
     routeLegs,
     toll.paidLegs,
     adjustedForeign?.fares ?? [],
     toll.detectedStations,
+    t('unknownLeg'),
   )
   const itemCount = chronoGroups.reduce((sum, g) => sum + g.items.length, 0)
+  const categoryKey = CATEGORY_KEYS[categoryCode]
+  const categoryLabel = categoryKey ? t(categoryKey) : toll.categoryLabel
+
+  function nameOf(code: string): string {
+    return countryName(code) !== code
+      ? countryName(code)
+      : (COUNTRY_FALLBACK[code] ?? code)
+  }
 
   return (
     <div className="result-panel">
       <header className="result-hero">
-        <p className="result-hero-label">Ukupno (okvirno)</p>
+        <p className="result-hero-label">{t('totalApprox')}</p>
         <p className="result-hero-value">{formatEur(grandTotal)}</p>
         <p className="result-hero-sub">{categoryLabel}</p>
         <div className="result-trip-chips">
@@ -331,28 +344,31 @@ export function ResultPanel({
       </header>
 
       <section className="result-block">
-        <h3 className="result-block-title">Sažetak troškova</h3>
+        <h3 className="result-block-title">{t('costSummary')}</h3>
         <div className="result-summary">
           <SummaryRow
-            label={`Gorivo · ${liters.toFixed(1)} L × ${fuelPrice} €`}
+            label={t('fuelRow', {
+              liters: liters.toFixed(1),
+              price: fuelPrice,
+            })}
             value={formatEur(fuelCost)}
           />
-          <SummaryRow label="Putarina ukupno" value={formatEur(tollTotal)} />
+          <SummaryRow label={t('tollTotal')} value={formatEur(tollTotal)} />
           <SummaryRow
-            label="↳ Srbija"
+            label={`↳ ${t('serbia')}`}
             value={formatEur(serbiaTollEur)}
             muted
           />
           {hasForeignTolls ? (
             <SummaryRow
-              label={`↳ Inostranstvo${isTruck ? ' (bez PDV)' : ''}`}
+              label={`↳ ${isTruck ? t('abroadNoVat') : t('abroad')}`}
               value={formatEur(foreignTollEur)}
               muted
             />
           ) : null}
           {foreignDiscount > 0 ? (
             <SummaryRow
-              label="↳ Popust"
+              label={`↳ ${t('discount')}`}
               value={`−${formatEur(foreignDiscount)}`}
               muted
               accent="save"
@@ -360,15 +376,18 @@ export function ResultPanel({
           ) : null}
           {foreignVatRemoved > 0 ? (
             <SummaryRow
-              label="↳ PDV odbijen"
+              label={`↳ ${t('vatDeducted')}`}
               value={`−${formatEur(foreignVatRemoved)}`}
               muted
               accent="save"
             />
           ) : null}
-          <SummaryRow label="Naknada vozača" value={formatEur(driverFee)} />
+          <SummaryRow label={t('driverFeeRow')} value={formatEur(driverFee)} />
           <SummaryRow
-            label={`Operativni troškovi · ${formatDistance(distanceMeters)} × ${operatingCostPerKm} €`}
+            label={t('operatingRow', {
+              distance: formatDistance(distanceMeters),
+              rate: operatingCostPerKm,
+            })}
             value={formatEur(operatingCost)}
           />
         </div>
@@ -376,19 +395,19 @@ export function ResultPanel({
 
       {serbiaTollEur > 0 || (adjustedForeign?.byCountry.length ?? 0) > 0 ? (
         <section className="result-block">
-          <h3 className="result-block-title">Putarina po zemljama</h3>
+          <h3 className="result-block-title">{t('tollByCountry')}</h3>
           <div className="result-summary">
             {serbiaTollEur > 0 ? (
-              <SummaryRow label="Srbija" value={formatEur(serbiaTollEur)} />
+              <SummaryRow label={t('serbia')} value={formatEur(serbiaTollEur)} />
             ) : null}
             {adjustedForeign?.byCountry.map((entry) => (
               <SummaryRow
                 key={`country-sum-${entry.country}`}
-                label={`${countryName(entry.country)} (${entry.country})`}
+                label={`${nameOf(entry.country)} (${entry.country})`}
                 value={formatEur(entry.netEur)}
               />
             ))}
-            <SummaryRow label="Putarina ukupno" value={formatEur(tollTotal)} />
+            <SummaryRow label={t('tollTotal')} value={formatEur(tollTotal)} />
           </div>
         </section>
       ) : null}
@@ -396,7 +415,7 @@ export function ResultPanel({
       {itemCount > 0 ? (
         <section className="result-block">
           <h3 className="result-block-title">
-            Putarina · redosled vožnje ({itemCount})
+            {t('tollChrono', { count: itemCount })}
           </h3>
           <div className="result-leg-groups">
             {chronoGroups.map((group) => (
@@ -416,8 +435,8 @@ export function ResultPanel({
                           <span className="result-card-tag">
                             SRB ·{' '}
                             {item.leg.kind === 'bypass'
-                              ? 'Obilaznica'
-                              : `Kartica ${item.cardNumber}`}
+                              ? t('bypass')
+                              : t('cardN', { n: item.cardNumber })}
                           </span>
                           <strong className="result-card-price">
                             {formatEur(item.leg.eur)}
@@ -428,7 +447,7 @@ export function ResultPanel({
                         </p>
                         {item.leg.stations.length > 0 ? (
                           <p className="result-card-detail">
-                            Rampe: {item.leg.stations.join(' → ')}
+                            {t('ramps')} {item.leg.stations.join(' → ')}
                           </p>
                         ) : null}
                       </article>
@@ -440,7 +459,7 @@ export function ResultPanel({
                         <div className="result-card-top">
                           <span className="result-card-tag">
                             {item.fare.country} ·{' '}
-                            {item.fare.kind === 'tunnel' ? 'Tunel' : 'Putarina'}
+                            {item.fare.kind === 'tunnel' ? t('tunnel') : t('toll')}
                           </span>
                           <strong className="result-card-price">
                             {formatEur(item.fare.netEur)}
@@ -448,15 +467,15 @@ export function ResultPanel({
                         </div>
                         <p className="result-card-main">{item.fare.name}</p>
                         <p className="result-card-detail">
-                          {countryName(item.fare.country)}
+                          {nameOf(item.fare.country)}
                           {item.fare.system && item.fare.system !== item.fare.name
                             ? ` · ${item.fare.system}`
                             : ''}
                           {item.fare.discountPercent > 0
-                            ? ` · popust −${item.fare.discountPercent}%`
+                            ? ` · ${t('discountPct', { pct: item.fare.discountPercent })}`
                             : ''}
                           {item.fare.netEur !== item.fare.grossEur
-                            ? ` · HERE ${formatEur(item.fare.grossEur)}`
+                            ? ` · ${t('hereGross', { amount: formatEur(item.fare.grossEur) })}`
                             : ''}
                         </p>
                       </article>
@@ -467,32 +486,24 @@ export function ResultPanel({
             ))}
           </div>
           {foreignTolls?.hasUnconverted ? (
-            <p className="result-footnote">
-              Neke stavke HERE nije mogao da preračuna u EUR.
-            </p>
+            <p className="result-footnote">{t('unconverted')}</p>
           ) : null}
         </section>
       ) : (
-        <div className="status status-ok result-empty">
-          Nema putarine na ovoj trasi.
-        </div>
+        <div className="status status-ok result-empty">{t('noToll')}</div>
       )}
 
       <details className="result-notes">
-        <summary>Napomene i sve rampe</summary>
+        <summary>{t('notesSummary')}</summary>
         <div className="result-notes-body">
-          <p className="result-disclaimer">{APP_DISCLAIMER}</p>
-          <p>
-            Formula: litri × cena goriva + putarina (SRB + inostranstvo) + naknada
-            + operativni (km × €/km). Stavke su poređane kako ide vozilo (A → stopovi →
-            B). Svaki izlazak sa autoputa i povratak = nova kartica.
-          </p>
+          <p className="result-disclaimer">{t('disclaimer')}</p>
+          <p>{t('formulaNote')}</p>
           {exchangeRateLabel ? <p>{exchangeRateLabel}</p> : null}
           {toll.bypass.note ? <p>{toll.bypass.note}</p> : null}
           {toll.detectedStations.length > 0 ? (
             <>
               <p className="result-notes-label">
-                Detektovane rampe na ruti ({toll.detectedStations.length})
+                {t('detectedRamps', { count: toll.detectedStations.length })}
               </p>
               <ul className="result-ramp-list">
                 {toll.detectedStations.map((station, index) => (
@@ -500,8 +511,8 @@ export function ResultPanel({
                     key={`${station.kind}-${station.name}-${station.passageIndex}-${index}`}
                   >
                     {station.name}
-                    {station.kind === 'bypass' ? ' · obilaznica' : ''}
-                    {station.passageIndex > 0 ? ' · ponovo' : ''}
+                    {station.kind === 'bypass' ? ` · ${t('bypassTag')}` : ''}
+                    {station.passageIndex > 0 ? ` · ${t('againTag')}` : ''}
                   </li>
                 ))}
               </ul>

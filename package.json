@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "sync:toll": "node scripts/sync-toll.mjs"
+    "sync:toll": "node scripts/sync-toll.mjs",
+    "setup:paypal": "node scripts/setup-paypal.mjs",
+    "deploy:paypal": "node scripts/deploy-paypal-firebase.mjs"
   },
   "dependencies": {
     "@here/flexpolyline": "^0.1.0",

@@ -1,3 +1,4 @@
-/** Shared legal / accuracy disclaimer (shown in UI). */
-export const APP_DISCLAIMER =
-  'Rezultati su isključivo okvirne procene. Ne garantujemo tačnost iznosa (putarina, gorivo, kursevi, rute) i ne odgovaramo za eventualne razlike u odnosu na stvarne troškove.'
+import { messages } from '../i18n/messages'
+
+/** @deprecated Prefer t('disclaimer') from LocaleContext */
+export const APP_DISCLAIMER = messages.sr.disclaimer

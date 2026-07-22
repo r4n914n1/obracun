@@ -72,6 +72,98 @@ body {
   max-width: 72rem;
 }
 
+.app-quota {
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+  color: #bbf7d0;
+}
+
+.app-notice {
+  margin: 0.25rem 0 0;
+  font-size: 0.72rem;
+  color: #fde68a;
+}
+
+.pricing-login-hint,
+.pricing-quota {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #475569;
+}
+
+.pricing-manage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1rem 1.05rem;
+  background: #ecfdf5;
+  border: 1px solid #86efac;
+  border-radius: 10px;
+}
+
+.pricing-manage h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: #14532d;
+}
+
+.pricing-manage p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #334155;
+}
+
+.pricing-queued {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #b45309;
+}
+
+.pricing-manage-hint {
+  color: #64748b !important;
+  font-size: 0.78rem !important;
+  line-height: 1.4;
+}
+
+.pricing-manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.pricing-notice {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+}
+
+.pricing-card.is-current {
+  border-color: #16a34a;
+  box-shadow: 0 0 0 1px #16a34a;
+}
+
+.pricing-badge-current {
+  background: #16a34a;
+  color: #fff;
+}
+
+.btn-danger {
+  background: #b91c1c;
+  color: #fff;
+  border: 1px solid #991b1b;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #991b1b;
+}
+
 .btn-logout {
   flex-shrink: 0;
   background: transparent;
@@ -91,6 +183,75 @@ body {
   align-items: center;
   gap: 0.4rem;
   flex-shrink: 0;
+}
+
+.lang-toggle {
+  display: inline-flex;
+  border: 1px solid #64748b;
+  border-radius: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.lang-toggle-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.28rem 0.45rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.lang-toggle-btn + .lang-toggle-btn {
+  border-left: 1px solid #64748b;
+}
+
+.lang-toggle-btn.is-active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #f8fafc;
+}
+
+.lang-toggle-btn:hover:not(.is-active) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.login-card .lang-toggle,
+.pricing-top .lang-toggle {
+  border-color: #94a3b8;
+}
+
+.login-card .lang-toggle-btn,
+.pricing-top .lang-toggle-btn {
+  color: #475569;
+}
+
+.login-card .lang-toggle-btn + .lang-toggle-btn,
+.pricing-top .lang-toggle-btn + .lang-toggle-btn {
+  border-left-color: #94a3b8;
+}
+
+.login-card .lang-toggle-btn.is-active,
+.pricing-top .lang-toggle-btn.is-active {
+  background: #0f2744;
+  color: #f8fafc;
+}
+
+.login-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.pricing-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .login-screen {
@@ -117,23 +278,38 @@ body {
 }
 
 .login-brand {
-  font-size: 0.72rem;
+  margin: 0.15rem 0 0;
+  font-size: clamp(1.85rem, 5vw, 2.35rem);
   font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #16a34a;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: #0f172a;
+}
+
+.login-tagline {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #166534;
 }
 
 .login-title {
   margin: 0;
-  font-size: 1.45rem;
+  font-size: 1.05rem;
+  font-weight: 700;
   color: #0f172a;
 }
 
 .login-sub {
-  margin: -0.25rem 0 0.35rem;
+  margin: 0.1rem 0 0.45rem;
   font-size: 0.82rem;
+  line-height: 1.45;
   color: #475569;
+}
+
+.login-lang-spacer {
+  flex: 1;
 }
 
 .login-field {
@@ -193,6 +369,67 @@ body {
   line-height: 1.4;
   color: #64748b;
   font-weight: 500;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.modal-card {
+  width: min(100%, 28rem);
+  padding: 1.1rem 1.15rem 1.15rem;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28);
+}
+
+.modal-title {
+  margin: 0 0 0.85rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.modal-textarea {
+  width: 100%;
+  min-height: 8.5rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font: inherit;
+  resize: vertical;
+}
+
+.modal-textarea:focus {
+  outline: 2px solid #2563eb;
+  border-color: #2563eb;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-top: 0.25rem;
+}
+
+.modal-success {
+  margin: 0 0 0.85rem;
+  color: #166534;
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 /* —— Pretplata / pricing —— */
@@ -769,11 +1006,19 @@ body {
   min-width: 0;
 }
 
-.cost-field > span {
+.cost-field > span:not(.cost-field-hint) {
   min-height: 2.1em;
   line-height: 1.05;
   display: flex;
   align-items: flex-end;
+}
+
+.cost-field-hint {
+  margin-top: 0.1rem;
+  font-size: 0.58rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: #64748b;
 }
 
 

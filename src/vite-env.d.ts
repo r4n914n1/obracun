@@ -3,8 +3,6 @@
 interface ImportMetaEnv {
   readonly VITE_GOOGLE_MAPS_API_KEY: string
   readonly VITE_HERE_API_KEY: string
-  readonly VITE_LOGIN_USER?: string
-  readonly VITE_LOGIN_PASSWORD?: string
   readonly VITE_BASE?: string
   readonly VITE_APP_URL?: string
   readonly VITE_FIREBASE_API_KEY?: string

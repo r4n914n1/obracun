@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { Location } from '../types'
 import { loadGoogleMaps } from '../services/googleMaps'
+import { useLocale } from '../i18n/LocaleContext'
 
 interface PlaceInputProps {
   label: string
@@ -11,10 +12,12 @@ interface PlaceInputProps {
 
 export function PlaceInput({
   label,
-  placeholder = 'Unesite adresu',
+  placeholder,
   value,
   onChange,
 }: PlaceInputProps) {
+  const { t, locale, ready: localeReady } = useLocale()
+  const resolvedPlaceholder = placeholder ?? t('placePlaceholder')
   const inputId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
@@ -28,16 +31,17 @@ export function PlaceInput({
   }, [onChange])
 
   useEffect(() => {
-    // Sync label when a place is selected; do not wipe text when value
-    // becomes null (user is editing / clearing coordinates only).
     if (value) setText(value.label)
   }, [value])
 
   useEffect(() => {
+    if (!localeReady) return
+
     let cancelled = false
     let listener: google.maps.MapsEventListener | null = null
+    const mapsLang = locale === 'sr' ? 'sr' : 'en'
 
-    loadGoogleMaps()
+    loadGoogleMaps(mapsLang)
       .then(() => {
         if (cancelled || !inputRef.current || autocompleteRef.current) return
 
@@ -53,7 +57,7 @@ export function PlaceInput({
 
           if (lat == null || lng == null) {
             onChangeRef.current(null)
-            setError('Izaberite adresu iz liste predloga')
+            setError(t('placePickError'))
             return
           }
 
@@ -69,7 +73,7 @@ export function PlaceInput({
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Greška Google Maps')
+          setError(err instanceof Error ? err.message : t('mapsError'))
         }
       })
 
@@ -79,7 +83,9 @@ export function PlaceInput({
         google.maps.event.removeListener(listener)
       }
     }
-  }, [])
+    // Init once locale is known; Maps language cannot swap without full page reload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localeReady])
 
   return (
     <label className="field" htmlFor={inputId}>
@@ -90,7 +96,7 @@ export function PlaceInput({
         className="field-input"
         type="text"
         value={text}
-        placeholder={ready ? placeholder : 'Učitavanje Google Places...'}
+        placeholder={ready ? resolvedPlaceholder : t('placesLoading')}
         disabled={!ready}
         onChange={(event) => {
           setText(event.target.value)

@@ -1,32 +1,41 @@
-const BUG_REPORT_EMAIL = 'r4n914n1@gmail.com'
+import { getFunctions, httpsCallable } from 'firebase/functions'
+import { getFirebaseApp, isFirebaseConfigured } from './firebase'
 
-const BUG_REPORT_SUBJECT = 'Obračun — prijava greške'
-const BUG_REPORT_BODY = `Opis problema:
+export const SUPPORT_EMAIL = 'support@transportcost.info'
 
+export async function submitBugReport(
+  email: string,
+  message: string,
+): Promise<void> {
+  if (!isFirebaseConfigured()) {
+    throw new Error('Bug report nije dostupan — Firebase nije podešen.')
+  }
 
-Koraci za reprodukciju:
-1.
-2.
+  const callable = httpsCallable<
+    { email: string; message: string },
+    { ok: boolean }
+  >(getFunctions(getFirebaseApp()), 'submitBugReport')
 
-Očekivano ponašanje:
+  try {
+    await callable({ email, message })
+  } catch (err: unknown) {
+    const code =
+      err && typeof err === 'object' && 'code' in err
+        ? String((err as { code?: string }).code)
+        : ''
+    const details =
+      err && typeof err === 'object' && 'message' in err
+        ? String((err as { message?: string }).message)
+        : ''
 
-
-Stvarno ponašanje:
-
-
-Pregledač / uređaj:
-
-
-Dodatne napomene:
-`
-
-/** Opens the user's mail client with a pre-filled bug report. */
-export function openBugReportMail(): void {
-  const url =
-    `mailto:${BUG_REPORT_EMAIL}` +
-    `?subject=${encodeURIComponent(BUG_REPORT_SUBJECT)}` +
-    `&body=${encodeURIComponent(BUG_REPORT_BODY)}`
-  window.location.href = url
+    if (code === 'functions/unavailable' || code === 'functions/not-found') {
+      throw new Error(
+        'Slanje trenutno nije dostupno. Pokušaj ponovo kasnije ili piši na support@transportcost.info.',
+      )
+    }
+    if (details) {
+      throw new Error(details)
+    }
+    throw err
+  }
 }
-
-export { BUG_REPORT_EMAIL }

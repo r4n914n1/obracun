@@ -8,28 +8,20 @@ import type {
 import {
   EMISSION_CLASS_OPTIONS,
   MAX_INTERMEDIATE_STOPS,
-  VEHICLE_OPTIONS,
+  VEHICLE_MODE_VALUES,
 } from '../types'
+import { useLocale } from '../i18n/LocaleContext'
+import type { MessageKey } from '../i18n/messages'
 import { PlaceInput } from './PlaceInput'
 
-const COUNTRY_LABELS: Record<string, string> = {
-  ITA: 'Italija',
-  FRA: 'Francuska',
-  ESP: 'Španija',
-  PRT: 'Portugal',
-  AUT: 'Austrija',
-  DEU: 'Nemačka',
-  BEL: 'Belgija',
-  POL: 'Poljska',
-  HUN: 'Mađarska',
-  HRV: 'Hrvatska',
-  SVN: 'Slovenija',
-  BGR: 'Bugarska',
-  ROU: 'Rumunija',
-  MKD: 'S. Makedonija',
-  MNE: 'Crna Gora',
-  GRC: 'Grčka',
-  TUR: 'Turska',
+const VEHICLE_COPY: Record<
+  VehicleMode,
+  { label: MessageKey; hint: MessageKey }
+> = {
+  car: { label: 'vehicleCar', hint: 'vehicleCarHint' },
+  freight_under_3_5: { label: 'vehicleVan', hint: 'vehicleVanHint' },
+  freight_3_6_to_10: { label: 'vehicleMid', hint: 'vehicleMidHint' },
+  freight_over_10: { label: 'vehicleHeavy', hint: 'vehicleHeavyHint' },
 }
 
 interface RouteFormProps {
@@ -107,6 +99,7 @@ export function RouteForm({
   onTollRateChange,
   onSubmit,
 }: RouteFormProps) {
+  const { t, countryName } = useLocale()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const tollRateEntries = Object.entries(tollRates)
   const incompleteStops = stops.some((stop) => stop === null)
@@ -143,17 +136,17 @@ export function RouteForm({
           type="button"
           className="btn btn-secondary btn-sm"
           disabled={busy || !onImportCsv}
-          title="Telematic izveštaj, učitaće se do 8 najdužih stop lokacija u kartu"
+          title={t('csvImportTitle')}
           onClick={() => fileInputRef.current?.click()}
         >
-          {importing ? 'Učitavam…' : 'Učitaj CSV sa stajanjem'}
+          {importing ? t('csvImporting') : t('csvImport')}
         </button>
       </div>
 
       <div className="form-compact">
         <PlaceInput
-          label="1. Odakle (A)"
-          placeholder="Kucaj + klikni predlog…"
+          label={t('originLabel')}
+          placeholder={t('placePlaceholder')}
           value={origin}
           onChange={onOriginChange}
         />
@@ -161,7 +154,7 @@ export function RouteForm({
         <div className="stops-compact">
           <div className="stops-header">
             <span className="field-label">
-              2. Stopovi (opciono, max {MAX_INTERMEDIATE_STOPS})
+              {t('stopsLabel', { max: MAX_INTERMEDIATE_STOPS })}
             </span>
             <button
               type="button"
@@ -170,18 +163,18 @@ export function RouteForm({
               disabled={busy || stops.length >= MAX_INTERMEDIATE_STOPS}
               title={
                 stops.length >= MAX_INTERMEDIATE_STOPS
-                  ? `Najviše ${MAX_INTERMEDIATE_STOPS} međustopova`
-                  : 'Dodaj stop'
+                  ? t('maxStopsTitle', { max: MAX_INTERMEDIATE_STOPS })
+                  : t('addStopTitle')
               }
             >
-              + Stop
+              {t('addStop')}
             </button>
           </div>
           {stops.map((stop, index) => (
             <div className="stop-row" key={`stop-${index}`}>
               <PlaceInput
-                label={`Stop ${index + 1}`}
-                placeholder="Kucaj + klikni predlog…"
+                label={t('stopN', { n: index + 1 })}
+                placeholder={t('placePlaceholder')}
                 value={stop}
                 onChange={(location) => onStopChange(index, location)}
               />
@@ -189,8 +182,8 @@ export function RouteForm({
                 type="button"
                 className="btn btn-danger btn-sm-square"
                 onClick={() => onRemoveStop(index)}
-                aria-label={`Ukloni stop ${index + 1}`}
-                title="Obriši"
+                aria-label={t('removeStop', { n: index + 1 })}
+                title={t('delete')}
               >
                 X
               </button>
@@ -203,11 +196,7 @@ export function RouteForm({
             type="button"
             className={`return-toggle${returnTrip ? ' is-on' : ''}`}
             aria-pressed={returnTrip}
-            title={
-              returnTrip
-                ? 'Povratak uključen: uračunava se i B → A'
-                : 'Uključi povratak (B → A)'
-            }
+            title={returnTrip ? t('returnOnTitle') : t('returnOffTitle')}
             disabled={busy}
             onClick={() => onReturnTripChange?.(!returnTrip)}
           >
@@ -215,13 +204,13 @@ export function RouteForm({
               ⇄
             </span>
             <span className="return-toggle-text">
-              {returnTrip ? 'Povratak' : 'Jedan smer'}
+              {returnTrip ? t('returnOn') : t('returnOff')}
             </span>
           </button>
           <div className="destination-field">
             <PlaceInput
-              label="3. Gde (B)"
-              placeholder="Kucaj + klikni predlog…"
+              label={t('destinationLabel')}
+              placeholder={t('placePlaceholder')}
               value={destination}
               onChange={onDestinationChange}
             />
@@ -229,27 +218,30 @@ export function RouteForm({
         </div>
 
         <div className="vehicle-block">
-          <span className="field-label">4. Vozilo</span>
+          <span className="field-label">{t('vehicleLabel')}</span>
           <div className="vehicle-grid">
-            {VEHICLE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={`vehicle-card${vehicleMode === option.value ? ' is-active' : ''}`}
-                onClick={() => onVehicleModeChange(option.value)}
-                title={option.hint}
-              >
-                <span className="vehicle-card-title">{option.label}</span>
-              </button>
-            ))}
+            {VEHICLE_MODE_VALUES.map((mode) => {
+              const copy = VEHICLE_COPY[mode]
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`vehicle-card${vehicleMode === mode ? ' is-active' : ''}`}
+                  onClick={() => onVehicleModeChange(mode)}
+                  title={t(copy.hint)}
+                >
+                  <span className="vehicle-card-title">{t(copy.label)}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
 
         <div className="cost-settings">
-          <span className="field-label">5. Podešavanja troška</span>
+          <span className="field-label">{t('costSettings')}</span>
           <div className="cost-settings-row">
             <label className="cost-field">
-              <span>Potrošnja (L/100 km)</span>
+              <span>{t('consumption')}</span>
               <input
                 type="number"
                 min={0}
@@ -262,7 +254,7 @@ export function RouteForm({
               />
             </label>
             <label className="cost-field">
-              <span>Cena goriva (€/L)</span>
+              <span>{t('fuelPrice')}</span>
               <input
                 type="number"
                 min={0}
@@ -275,7 +267,7 @@ export function RouteForm({
               />
             </label>
             <label className="cost-field">
-              <span>Naknada vozača (€)</span>
+              <span>{t('driverFee')}</span>
               <input
                 type="number"
                 min={0}
@@ -286,9 +278,10 @@ export function RouteForm({
                   onDriverFeeChange(Number.isFinite(next) ? next : 0)
                 }}
               />
+              <span className="cost-field-hint">{t('driverFeeHint')}</span>
             </label>
             <label className="cost-field">
-              <span>Operativni troškovi (€/km)</span>
+              <span>{t('operatingCost')}</span>
               <input
                 type="number"
                 min={0}
@@ -299,20 +292,17 @@ export function RouteForm({
                   onOperatingCostPerKmChange(Number.isFinite(next) ? next : 0)
                 }}
               />
+              <span className="cost-field-hint">{t('operatingCostHint')}</span>
             </label>
           </div>
-          <p className="cost-settings-hint">
-            Ukupno = litri × cena goriva + putarina + naknada + operativni (km × €/km)
-          </p>
+          <p className="cost-settings-hint">{t('costHint')}</p>
         </div>
 
         <details className="cost-settings advanced-settings">
-          <summary className="field-label">
-            6. Napredno — strane putarine
-          </summary>
+          <summary className="field-label">{t('advancedTitle')}</summary>
           <div className="cost-settings-row">
             <label className="cost-field">
-              <span>EURO klasa</span>
+              <span>{t('euroClass')}</span>
               <select
                 value={emissionClass}
                 onChange={(event) =>
@@ -327,7 +317,7 @@ export function RouteForm({
               </select>
             </label>
             <label className="cost-field">
-              <span>Broj osovina</span>
+              <span>{t('axleCount')}</span>
               <input
                 type="number"
                 min={2}
@@ -341,7 +331,7 @@ export function RouteForm({
               />
             </label>
             <label className="cost-field">
-              <span>Visina (cm)</span>
+              <span>{t('heightCm')}</span>
               <input
                 type="number"
                 min={0}
@@ -355,41 +345,35 @@ export function RouteForm({
               />
             </label>
           </div>
-          <p className="cost-settings-hint">
-            Utiče na putarine van Srbije (HERE). Osovine i visina se koriste za
-            kamione.
-          </p>
+          <p className="cost-settings-hint">{t('advancedHint')}</p>
         </details>
 
         {!canSubmit && !busy ? (
-          <p className="todo-line">Fali: {missing.join(', ')}</p>
+          <p className="todo-line">{t('missing', { list: missing.join(', ') })}</p>
         ) : null}
 
         <button type="submit" className="btn btn-primary btn-xl" disabled={!canSubmit}>
-          {importing ? 'Učitavam…' : loading ? 'Računam…' : 'IZRAČUNAJ'}
+          {importing
+            ? t('csvImporting')
+            : loading
+              ? t('calculatingBtn')
+              : t('calculate')}
         </button>
 
         <details className="cost-settings toll-rates-editor" open={isTruck}>
-          <summary className="field-label">
-            Strane putarine — PDV i popust (kamioni)
-          </summary>
-          <p className="cost-settings-hint">
-            Primenjuje se samo na kamione. Putarina i tuneli imaju poseban
-            popust po zemlji, zatim skidanje PDV-a. Sa Google nalogom izmene se
-            čuvaju na serveru (svi uređaji); lokalni nalog — samo u ovom
-            pregledaču.
-          </p>
+          <summary className="field-label">{t('foreignRatesTitle')}</summary>
+          <p className="cost-settings-hint">{t('foreignRatesHint')}</p>
           <div className="toll-rates-table toll-rates-table-wide">
             <div className="toll-rates-head">
-              <span>Zemlja</span>
-              <span>Put. %</span>
-              <span>Tunel %</span>
-              <span>PDV %</span>
+              <span>{t('countryCol')}</span>
+              <span>{t('tollPct')}</span>
+              <span>{t('tunnelPct')}</span>
+              <span>{t('vatPct')}</span>
             </div>
             {tollRateEntries.map(([country, rate]) => (
               <div className="toll-rates-row" key={`rate-${country}`}>
                 <span className="toll-rates-country">
-                  {COUNTRY_LABELS[country] ?? country}
+                  {countryName(country)}
                 </span>
                 <input
                   type="number"

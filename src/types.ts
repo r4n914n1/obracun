@@ -51,31 +51,11 @@ export interface RouteResult {
   foreignTolls: ForeignTollSummary
 }
 
-export const VEHICLE_OPTIONS: Array<{
-  value: VehicleMode
-  label: string
-  hint: string
-}> = [
-  {
-    value: 'car',
-    label: 'Automobil / putničko',
-    hint: 'Običan auto (1. kategorija putarine)',
-  },
-  {
-    value: 'freight_under_3_5',
-    label: 'Kombi / teretno do 3.5t',
-    hint: 'Lakše teretno (2. kategorija)',
-  },
-  {
-    value: 'freight_3_6_to_10',
-    label: 'Kamion 3.6–10t',
-    hint: 'Srednji kamion (3. kategorija)',
-  },
-  {
-    value: 'freight_over_10',
-    label: 'Teški kamion 10t+',
-    hint: 'Teško teretno + Obilaznica BG (4. kategorija)',
-  },
+export const VEHICLE_MODE_VALUES: VehicleMode[] = [
+  'car',
+  'freight_under_3_5',
+  'freight_3_6_to_10',
+  'freight_over_10',
 ]
 
 /** Map of app vehicle modes to Putevi Srbije toll categories */
@@ -94,10 +74,10 @@ export const DEFAULT_CONSUMPTION_L_PER_100KM: Record<VehicleMode, number> = {
   freight_over_10: 30,
 }
 
-export const DEFAULT_DRIVER_FEE_EUR = 20
+export const DEFAULT_DRIVER_FEE_EUR = 0
 export const DEFAULT_FUEL_PRICE_EUR_PER_L = 1.5
-/** Operativni troškovi (€/km) — množi se sa km rute */
-export const DEFAULT_OPERATING_COST_EUR_PER_KM = 0.27
+/** Operativni troškovi (€/km) — default 0; unesi ako računaš servis/amortizaciju */
+export const DEFAULT_OPERATING_COST_EUR_PER_KM = 0
 /** Max međustopova između A i B (ručni unos i CSV import) */
 export const MAX_INTERMEDIATE_STOPS = 8
 

@@ -71,11 +71,7 @@ function saveLocal(rates: ForeignTollRates, accountId: string | null): void {
   }
 }
 
-/**
- * Load toll rates for the signed-in account.
- * Google/Firebase → Firestore (sync across browsers).
- * Legacy password login → localStorage only.
- */
+/** Load toll rates for the signed-in Google account (Firestore + local cache). */
 export async function loadTollRatesForUser(
   accountId?: string | null,
 ): Promise<ForeignTollRates> {
