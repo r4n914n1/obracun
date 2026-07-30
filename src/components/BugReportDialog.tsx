@@ -1,4 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocale } from '../i18n/LocaleContext'
 import { getAuthUsername } from '../services/auth'
 import { submitBugReport } from '../services/bugReport'
@@ -65,7 +66,7 @@ export function BugReportDialog({ open, onClose }: BugReportDialogProps) {
     }
   }
 
-  return (
+  return createPortal(
     <div
       className="modal-backdrop"
       role="presentation"
@@ -149,6 +150,7 @@ export function BugReportDialog({ open, onClose }: BugReportDialogProps) {
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

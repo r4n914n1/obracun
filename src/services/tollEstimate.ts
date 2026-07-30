@@ -5,9 +5,11 @@ import type { VehicleMode } from '../types'
 import { findPassagesAlongRoute, haversineMeters } from './geo'
 import {
   assignStationsToIntervals,
+  BYPASS_SESSION_MERGE_GAP_M,
   findBypassTollIntervals,
   findHighwayTollIntervals,
   mergeCloseSessions,
+  SESSION_MERGE_GAP_M,
 } from './tollNetwork'
 
 /** Max distance from route centerline to count a toll station (m) */
@@ -197,10 +199,8 @@ function priceSession(
       ? Math.round((amount / rsdPerEur) * 100) / 100
       : Math.round(amount * 100) / 100
 
-  const fromLabel =
-    from !== fromDisplay ? `${fromDisplay} (cena kao ${from})` : fromDisplay
-  const toLabel =
-    to !== toDisplay ? `${toDisplay} (cena kao ${to})` : toDisplay
+  const fromLabel = fromDisplay
+  const toLabel = toDisplay
 
   return {
     kind,
@@ -259,7 +259,9 @@ export function splitIntoTollSessions(
   const assigned = assignStationsToIntervals(ordered, intervals).filter(
     (session) => session.length > 0,
   )
-  return mergeCloseSessions(assigned)
+  const mergeGap =
+    kind === 'bypass' ? BYPASS_SESSION_MERGE_GAP_M : SESSION_MERGE_GAP_M
+  return mergeCloseSessions(assigned, mergeGap)
 }
 
 function estimateTollOnCoordinates(

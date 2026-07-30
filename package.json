@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "start": "superstatic dist --port $PORT --host 0.0.0.0 -c superstatic.json",
     "lint": "oxlint",
     "preview": "vite preview",
     "sync:toll": "node scripts/sync-toll.mjs",
@@ -18,7 +19,8 @@
     "leaflet": "^1.9.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "react-leaflet": "^5.0.0"
+    "react-leaflet": "^5.0.0",
+    "superstatic": "^9.2.0"
   },
   "devDependencies": {
     "@types/google.maps": "^3.65.2",

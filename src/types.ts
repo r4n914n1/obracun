@@ -10,6 +10,44 @@ export interface Location {
   lng: number
 }
 
+/** Intermediate stop row with stable id for reorder / drag-and-drop. */
+export interface StopSlot {
+  id: string
+  location: Location | null
+}
+
+export type MapPickTarget =
+  | { kind: 'origin' }
+  | { kind: 'destination' }
+  | { kind: 'stop'; index: number }
+
+export function mapPickKey(target: MapPickTarget): string {
+  if (target.kind === 'origin') return 'origin'
+  if (target.kind === 'destination') return 'destination'
+  return `stop-${target.index}`
+}
+
+export function isSameMapPickTarget(
+  a: MapPickTarget,
+  b: MapPickTarget,
+): boolean {
+  return mapPickKey(a) === mapPickKey(b)
+}
+
+export function mapPickShortLabel(target: MapPickTarget): string {
+  if (target.kind === 'origin') return 'A'
+  if (target.kind === 'destination') return 'B'
+  return String(target.index + 1)
+}
+
+export function createStopSlot(location: Location | null = null): StopSlot {
+  const id =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `stop-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+  return { id, location }
+}
+
 export interface RouteLeg {
   coordinates: [number, number][]
   distanceMeters: number
@@ -28,9 +66,13 @@ export interface ForeignTollFare {
   kind: 'toll' | 'tunnel'
   /** Route segment A → B where HERE reported this toll (when known). */
   routeLegLabel: string | null
-  /** Approximate map position from the HERE section carrying this toll. */
+  /** Approximate map position for chronological ordering along the route. */
   lat: number | null
   lng: number | null
+  /** Stable order inside a HERE section (drive order). */
+  sequence: number
+  /** Absolute meters along the full route polyline (for chrono sort). */
+  progressMeters: number | null
 }
 
 export interface ForeignTollSummary {
@@ -49,6 +91,8 @@ export interface RouteResult {
   legs: RouteLeg[]
   /** Tolls outside Serbia, computed by HERE (Serbia handled by our own engine). */
   foreignTolls: ForeignTollSummary
+  /** Distance per ISO country code from HERE countryCode spans (meters). */
+  distanceByCountry: Record<string, number>
 }
 
 export const VEHICLE_MODE_VALUES: VehicleMode[] = [

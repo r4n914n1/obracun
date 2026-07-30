@@ -4,6 +4,7 @@ exports.PLAN_DEFINITIONS = void 0;
 exports.planDefinition = planDefinition;
 /** Must match src/data/pricingPlans.ts plan ids. */
 exports.PLAN_DEFINITIONS = {
+    'lite-1m': { id: 'lite-1m', monthlyLimit: 100 },
     'starter-1m': { id: 'starter-1m', monthlyLimit: 500 },
     'standard-1m': { id: 'standard-1m', monthlyLimit: 1000 },
     'pro-1m': { id: 'pro-1m', monthlyLimit: 2500 },

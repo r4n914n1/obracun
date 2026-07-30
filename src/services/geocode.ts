@@ -28,6 +28,25 @@ export async function geocodeAddress(address: string): Promise<Location> {
   return { label, lat, lng }
 }
 
+/** Reverse-geocode map coordinates via Google Maps Geocoder. */
+export async function reverseGeocode(
+  lat: number,
+  lng: number,
+): Promise<Location> {
+  const googleApi = await loadGoogleMaps()
+  const geocoder = new googleApi.maps.Geocoder()
+  const response = await geocoder.geocode({ location: { lat, lng } })
+  const result = response.results[0]
+  const fallbackLabel = `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+
+  if (!result?.geometry?.location) {
+    return { label: fallbackLabel, lat, lng }
+  }
+
+  const label = result.formatted_address ?? fallbackLabel
+  return { label, lat, lng }
+}
+
 /** Geocode many labels sequentially (gentle rate limit). */
 export async function geocodeAddresses(
   labels: string[],

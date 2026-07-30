@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet'
+import {
+  MapContainer,
+  Marker,
+  Polyline,
+  TileLayer,
+  useMap,
+  useMapEvents,
+} from 'react-leaflet'
 import L from 'leaflet'
-import type { Location } from '../types'
-import type { DetectedTollStation } from '../services/tollEstimate'
+import type { Location, MapPickTarget } from '../types'
 
 import 'leaflet/dist/leaflet.css'
 
@@ -14,7 +20,24 @@ interface RouteMapProps {
   destination: Location | null
   stops: Location[]
   routeCoordinates: [number, number][]
-  tollStations?: DetectedTollStation[]
+  mapPickTarget?: MapPickTarget | null
+  onMapPick?: (lat: number, lng: number) => void
+}
+
+function MapPickHandler({
+  enabled,
+  onPick,
+}: {
+  enabled: boolean
+  onPick: (lat: number, lng: number) => void
+}) {
+  useMapEvents({
+    click(event) {
+      if (!enabled) return
+      onPick(event.latlng.lat, event.latlng.lng)
+    },
+  })
+  return null
 }
 
 function createPinIcon(label: string, color: string): L.DivIcon {
@@ -32,11 +55,16 @@ function FitBounds({
   destination,
   stops,
   routeCoordinates,
+  mapPickTarget = null,
 }: RouteMapProps) {
   const map = useMap()
   const previousPointCount = useRef(0)
+  const previousSignature = useRef<string | null>(null)
 
   useEffect(() => {
+    // Keep the user's current view while choosing a point on the map.
+    if (mapPickTarget != null) return
+
     const points: [number, number][] = []
 
     if (routeCoordinates.length >= 2) {
@@ -52,13 +80,25 @@ function FitBounds({
         ? routeCoordinates.length
         : (origin ? 1 : 0) + stops.length + (destination ? 1 : 0)
 
+    const signature =
+      routeCoordinates.length >= 2
+        ? `route:${routeCoordinates.length}:${routeCoordinates[0]?.join(',')}:${routeCoordinates[routeCoordinates.length - 1]?.join(',')}`
+        : points.map((p) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`).join('|')
+
     const clearedWhileEditing =
       nextCount < previousPointCount.current && routeCoordinates.length < 2
 
-    previousPointCount.current = nextCount
+    const unchanged =
+      previousSignature.current !== null &&
+      previousSignature.current === signature &&
+      previousPointCount.current === nextCount
 
-    // Keep the current view when a pin is cleared mid-typing.
-    if (clearedWhileEditing) return
+    previousPointCount.current = nextCount
+    previousSignature.current = signature
+
+    // Keep the current view when a pin is cleared mid-typing,
+    // or when parent re-rendered with the same geography.
+    if (clearedWhileEditing || unchanged) return
 
     if (points.length === 0) {
       map.setView(DEFAULT_CENTER, DEFAULT_ZOOM)
@@ -71,7 +111,7 @@ function FitBounds({
     }
 
     map.fitBounds(L.latLngBounds(points), { padding: [40, 40] })
-  }, [map, origin, destination, stops, routeCoordinates])
+  }, [map, origin, destination, stops, routeCoordinates, mapPickTarget])
 
   return null
 }
@@ -81,19 +121,19 @@ export function RouteMap({
   destination,
   stops,
   routeCoordinates,
-  tollStations = [],
+  mapPickTarget = null,
+  onMapPick,
 }: RouteMapProps) {
+  const picking = mapPickTarget != null
   const originIcon = useMemo(() => createPinIcon('A', '#16a34a'), [])
   const destinationIcon = useMemo(() => createPinIcon('B', '#dc2626'), [])
   const stopIcons = useMemo(
     () => stops.map((_, index) => createPinIcon(String(index + 1), '#2563eb')),
     [stops],
   )
-  const tollIcon = useMemo(() => createPinIcon('N', '#b45309'), [])
-  const bypassIcon = useMemo(() => createPinIcon('O', '#7c2d12'), [])
 
   return (
-    <div className="map-wrap">
+    <div className={`map-wrap${picking ? ' map-wrap-picking' : ''}`}>
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={DEFAULT_ZOOM}
@@ -110,7 +150,12 @@ export function RouteMap({
           destination={destination}
           stops={stops}
           routeCoordinates={routeCoordinates}
+          mapPickTarget={mapPickTarget}
         />
+
+        {picking && onMapPick ? (
+          <MapPickHandler enabled onPick={onMapPick} />
+        ) : null}
 
         {origin ? (
           <Marker
@@ -136,15 +181,6 @@ export function RouteMap({
             title={`B: ${destination.label}`}
           />
         ) : null}
-
-        {tollStations.map((station) => (
-          <Marker
-            key={`toll-${station.kind}-${station.name}-${station.lat}`}
-            position={[station.lat, station.lng]}
-            icon={station.kind === 'bypass' ? bypassIcon : tollIcon}
-            title={station.name}
-          />
-        ))}
 
         {routeCoordinates.length >= 2 ? (
           <Polyline

@@ -40,13 +40,30 @@ export async function fetchQuota(): Promise<QuotaSnapshot> {
       queuedPlanId: null,
       cancelAtPeriodEnd: false,
       calculationsUsed: 0,
-      limit: 10,
-      remaining: 10,
+      limit: 5,
+      remaining: 5,
+      bonusCalculations: 0,
+      adRewardsClaimed: 0,
+      adRewardsRemaining: 3,
+      canClaimAdReward: false,
       canCalculate: true,
       periodEnd: null,
     }
   }
   const fn = httpsCallable<void, QuotaSnapshot>(billingFunctions(), 'ensureUser')
+  try {
+    const result = await fn()
+    return result.data
+  } catch (err) {
+    throw mapBillingError(err)
+  }
+}
+
+export async function claimAdRewardBonus(): Promise<QuotaSnapshot> {
+  const fn = httpsCallable<void, QuotaSnapshot>(
+    billingFunctions(),
+    'claimAdReward',
+  )
   try {
     const result = await fn()
     return result.data

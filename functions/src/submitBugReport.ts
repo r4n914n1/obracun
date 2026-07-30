@@ -4,10 +4,11 @@ import { defineSecret, defineString } from 'firebase-functions/params'
 
 const resendApiKey = defineSecret('RESEND_API_KEY')
 const supportEmail = defineString('SUPPORT_EMAIL', {
-  default: 'support@transportcost.info',
+  // Until transportcost.info is Verified in Resend, only the account email can receive.
+  default: 'r4n914n1@gmail.com',
 })
 const mailFrom = defineString('MAIL_FROM', {
-  default: 'Transport Cost <noreply@transportcost.info>',
+  default: 'Transport Cost <onboarding@resend.dev>',
 })
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -51,14 +52,25 @@ async function sendWithResend(
       to: [to],
       reply_to: replyTo,
       subject: `[Bug report] ${replyTo}`,
-      text: message,
+      text: [
+        `Reply-To / korisnik: ${replyTo}`,
+        '',
+        message,
+      ].join('\n'),
     }),
   })
 
   if (!response.ok) {
     const body = await response.text()
     console.error('Resend error', response.status, body)
-    throw new HttpsError('internal', 'Failed to send email.')
+    let detail = 'Failed to send email.'
+    try {
+      const parsed = JSON.parse(body) as { message?: string }
+      if (parsed.message) detail = parsed.message
+    } catch {
+      // keep default
+    }
+    throw new HttpsError('internal', detail)
   }
 }
 
@@ -80,13 +92,36 @@ export const submitBugReport = onCall(
             : null,
       })
 
-    await sendWithResend(
-      resendApiKey.value(),
-      mailFrom.value(),
-      supportEmail.value(),
-      email,
-      message,
-    )
+    const apiKey = resendApiKey.value().trim()
+    if (!apiKey || apiKey === 'placeholder-not-configured') {
+      console.error('RESEND_API_KEY is missing or placeholder')
+      throw new HttpsError(
+        'failed-precondition',
+        'E-mail slanje nije podešeno (Resend API key). Prijava je sačuvana u bazi.',
+      )
+    }
+
+    try {
+      await sendWithResend(
+        apiKey,
+        mailFrom.value(),
+        supportEmail.value(),
+        email,
+        message,
+      )
+    } catch (err) {
+      console.error(err)
+      const detail =
+        err instanceof HttpsError && err.message
+          ? err.message
+          : 'Prijava je sačuvana, ali slanje e-maila nije uspelo. Proveri Resend API key / domen.'
+      throw new HttpsError(
+        'internal',
+        detail.startsWith('Prijava')
+          ? detail
+          : `Prijava je sačuvana, ali slanje e-maila nije uspelo: ${detail}`,
+      )
+    }
 
     return { ok: true }
   },

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.submitBugReport = exports.paypalWebhook = exports.createPortalSession = exports.cancelSubscription = exports.confirmPayPalSubscription = exports.createCheckoutSession = exports.recordSuccessfulCalculation = exports.ensureUser = void 0;
+exports.submitBugReport = exports.paypalWebhook = exports.createPortalSession = exports.cancelSubscription = exports.confirmPayPalSubscription = exports.createCheckoutSession = exports.claimAdReward = exports.recordSuccessfulCalculation = exports.ensureUser = void 0;
 const app_1 = require("firebase-admin/app");
 const firestore_1 = require("firebase-admin/firestore");
 const https_1 = require("firebase-functions/v2/https");
@@ -41,7 +41,7 @@ exports.recordSuccessfulCalculation = (0, https_1.onCall)(async (request) => {
                 photoURL: authUser.photoURL ?? null,
                 plan: 'free',
                 planId: null,
-                monthlyLimit: 10,
+                monthlyLimit: billingCore_1.FREE_LIMIT,
                 calculationsUsed: 0,
                 usageMonth: null,
                 createdAt: firestore_1.FieldValue.serverTimestamp(),
@@ -58,22 +58,68 @@ exports.recordSuccessfulCalculation = (0, https_1.onCall)(async (request) => {
             throw new https_1.HttpsError('resource-exhausted', 'Pretplata je istekla. Pretplati se ponovo da nastaviš.');
         }
         if (!(0, billingCore_1.canCalculate)(data)) {
-            throw new https_1.HttpsError('resource-exhausted', 'Potrošio si limit računanja. Nadogradi paket ili sačekaj sledeći period.');
+            throw new https_1.HttpsError('resource-exhausted', 'Potrošio si limit računanja. Nadogradi paket ili odgledaj reklamu za +1 računanje.');
         }
-        const nextUsed = (data.calculationsUsed ?? 0) + 1;
-        const update = {
-            calculationsUsed: nextUsed,
-        };
-        if ((0, billingCore_1.isSubscriptionActive)(data)) {
-            update.usageMonth = new Date().toISOString().slice(0, 7);
+        const planRemaining = (0, billingCore_1.remainingFor)(data);
+        const bonus = (0, billingCore_1.bonusCalculationsFor)(data);
+        const update = {};
+        if (planRemaining > 0) {
+            const nextUsed = (data.calculationsUsed ?? 0) + 1;
+            update.calculationsUsed = nextUsed;
+            if ((0, billingCore_1.isSubscriptionActive)(data)) {
+                update.usageMonth = new Date().toISOString().slice(0, 7);
+            }
+            tx.set(ref, update, { merge: true });
+            return { ...data, ...update };
         }
-        tx.set(ref, update, { merge: true });
-        const next = { ...data, calculationsUsed: nextUsed, ...update };
-        return next;
+        if (bonus > 0) {
+            update.bonusCalculations = bonus - 1;
+            tx.set(ref, update, { merge: true });
+            return { ...data, ...update };
+        }
+        throw new https_1.HttpsError('resource-exhausted', 'Potrošio si limit računanja. Nadogradi paket ili odgledaj reklamu za +1 računanje.');
     });
     if ((0, billingCore_1.hasQueuedPlan)(result) && (0, billingCore_1.currentPeriodExhausted)(result)) {
         result = await (0, billingCore_1.promoteQueuedIfReady)(uid, result);
     }
+    return (0, billingCore_1.quotaPayload)(result);
+});
+/** Grant +1 bonus calculation after watching an ad (max 3 lifetime per account). */
+exports.claimAdReward = (0, https_1.onCall)(async (request) => {
+    if (!request.auth?.uid) {
+        throw new https_1.HttpsError('unauthenticated', 'Prijava je obavezna.');
+    }
+    const uid = request.auth.uid;
+    await (0, billingCore_1.ensureUserDoc)(uid);
+    const ref = (0, billingCore_1.db)().collection('users').doc(uid);
+    const result = await (0, billingCore_1.db)().runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) {
+            throw new https_1.HttpsError('not-found', 'Nalog nije pronađen.');
+        }
+        let data = (0, billingCore_1.normalizeUsage)(snap.data());
+        if ((0, billingCore_1.isSubscriptionActive)(data) || (0, billingCore_1.hasQueuedPlan)(data)) {
+            throw new https_1.HttpsError('failed-precondition', 'Bonus preko reklame važi samo za besplatni nalog.');
+        }
+        if ((0, billingCore_1.remainingFor)(data) > 0) {
+            throw new https_1.HttpsError('failed-precondition', 'Još imaš besplatna računanja. Potroši ih pre reklame.');
+        }
+        const claimed = (0, billingCore_1.adRewardsClaimedFor)(data);
+        if (claimed >= billingCore_1.AD_REWARD_LIFETIME_LIMIT) {
+            throw new https_1.HttpsError('resource-exhausted', `Iskoristio si sva ${billingCore_1.AD_REWARD_LIFETIME_LIMIT} bonus računanja preko reklame. Izaberi paket da nastaviš.`);
+        }
+        if (!(0, billingCore_1.canClaimAdReward)(data)) {
+            throw new https_1.HttpsError('failed-precondition', 'Bonus preko reklame trenutno nije dostupan.');
+        }
+        const nextClaimed = claimed + 1;
+        const nextBonus = (0, billingCore_1.bonusCalculationsFor)(data) + 1;
+        const update = {
+            adRewardsClaimed: nextClaimed,
+            bonusCalculations: nextBonus,
+        };
+        tx.set(ref, update, { merge: true });
+        return { ...data, ...update };
+    });
     return (0, billingCore_1.quotaPayload)(result);
 });
 //# sourceMappingURL=index.js.map

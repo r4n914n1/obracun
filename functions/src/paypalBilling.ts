@@ -129,7 +129,7 @@ export const createCheckoutSession = onCall(
     const user = await ensureUserDoc(uid)
     const paypalPlanId = paypalPlanIdForAppPlan(appPlanId)
     const base = appUrl.value().replace(/\/?$/, '/')
-    const returnUrl = `${base}?checkout=success`
+    const returnUrl = `${base}?checkout=success&plan=${encodeURIComponent(appPlanId)}`
     const cancelUrl = `${base}?checkout=cancel`
 
     const activeNow =

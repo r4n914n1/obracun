@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.FREE_LIMIT = void 0;
+exports.AD_REWARD_LIFETIME_LIMIT = exports.FREE_LIMIT = void 0;
 exports.db = db;
 exports.currentUsageMonth = currentUsageMonth;
 exports.isSubscriptionActive = isSubscriptionActive;
@@ -10,7 +10,11 @@ exports.hasQueuedPlan = hasQueuedPlan;
 exports.isCancelAtPeriodEnd = isCancelAtPeriodEnd;
 exports.normalizeUsage = normalizeUsage;
 exports.remainingFor = remainingFor;
+exports.bonusCalculationsFor = bonusCalculationsFor;
+exports.adRewardsClaimedFor = adRewardsClaimedFor;
+exports.adRewardsRemainingFor = adRewardsRemainingFor;
 exports.canCalculate = canCalculate;
+exports.canClaimAdReward = canClaimAdReward;
 exports.clearQueueFields = clearQueueFields;
 exports.applyQueuedPlan = applyQueuedPlan;
 exports.promoteQueuedIfReady = promoteQueuedIfReady;
@@ -24,7 +28,9 @@ const firestore_1 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
 const firestore_2 = require("firebase-admin/firestore");
 const plans_1 = require("./plans");
-exports.FREE_LIMIT = 10;
+exports.FREE_LIMIT = 5;
+/** Lifetime max rewarded-ad bonuses per account (no reset). */
+exports.AD_REWARD_LIFETIME_LIMIT = 3;
 function db() {
     return (0, firestore_1.getFirestore)();
 }
@@ -89,6 +95,17 @@ function remainingFor(data) {
     const used = normalized.calculationsUsed ?? 0;
     return Math.max(0, limit - used);
 }
+function bonusCalculationsFor(data) {
+    const n = data.bonusCalculations;
+    return typeof n === 'number' && n > 0 ? Math.floor(n) : 0;
+}
+function adRewardsClaimedFor(data) {
+    const n = data.adRewardsClaimed;
+    return typeof n === 'number' && n > 0 ? Math.floor(n) : 0;
+}
+function adRewardsRemainingFor(data) {
+    return Math.max(0, exports.AD_REWARD_LIFETIME_LIMIT - adRewardsClaimedFor(data));
+}
 function canCalculate(data) {
     if (hasQueuedPlan(data) && currentPeriodExhausted(data)) {
         // Queued plan will be promoted; treat as calculable after promote.
@@ -97,7 +114,15 @@ function canCalculate(data) {
     if (data.plan === 'subscribed' && !isSubscriptionActive(data)) {
         return false;
     }
-    return remainingFor(data) > 0;
+    return remainingFor(data) > 0 || bonusCalculationsFor(data) > 0;
+}
+/** Free user with no plan remaining and lifetime ad rewards left. */
+function canClaimAdReward(data) {
+    if (isSubscriptionActive(data) || hasQueuedPlan(data))
+        return false;
+    if (remainingFor(data) > 0)
+        return false;
+    return adRewardsRemainingFor(data) > 0;
 }
 function clearQueueFields() {
     return {
@@ -185,6 +210,8 @@ async function ensureUserDoc(uid) {
         queuedPaypalSubscriptionId: null,
         queuedPeriodEnd: null,
         cancelAtPeriodEnd: false,
+        bonusCalculations: 0,
+        adRewardsClaimed: 0,
         createdAt: firestore_2.FieldValue.serverTimestamp(),
     };
     await ref.set(created, { merge: true });
@@ -195,6 +222,10 @@ function quotaPayload(data) {
     const normalized = normalizeUsage(data);
     const limit = effectiveLimit(normalized);
     const used = normalized.calculationsUsed ?? 0;
+    const planRemaining = Math.max(0, limit - used);
+    const bonus = bonusCalculationsFor(normalized);
+    const adRewardsClaimed = adRewardsClaimedFor(normalized);
+    const adRewardsRemaining = adRewardsRemainingFor(normalized);
     return {
         plan: isSubscriptionActive(normalized) || hasQueuedPlan(normalized)
             ? 'subscribed'
@@ -206,7 +237,11 @@ function quotaPayload(data) {
         cancelAtPeriodEnd: isCancelAtPeriodEnd(normalized),
         calculationsUsed: used,
         limit,
-        remaining: Math.max(0, limit - used),
+        remaining: planRemaining,
+        bonusCalculations: bonus,
+        adRewardsClaimed,
+        adRewardsRemaining,
+        canClaimAdReward: canClaimAdReward(normalized),
         canCalculate: canCalculate(normalized),
         periodEnd: normalized.periodEnd
             ? normalized.periodEnd.toDate().toISOString()

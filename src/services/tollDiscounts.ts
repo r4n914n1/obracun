@@ -17,6 +17,8 @@ export interface AdjustedFare {
   routeLegLabel: string | null
   lat: number | null
   lng: number | null
+  sequence: number
+  progressMeters: number | null
 }
 
 export interface AdjustedCountry {
@@ -112,6 +114,8 @@ export function adjustForeignTolls(
       routeLegLabel: fare.routeLegLabel,
       lat: fare.lat,
       lng: fare.lng,
+      sequence: fare.sequence,
+      progressMeters: fare.progressMeters,
     }
   })
 

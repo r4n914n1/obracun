@@ -59,3 +59,8 @@ export function rsdToEur(rsd: number, rsdPerEur: number): number {
   if (rsdPerEur <= 0) return 0
   return Math.round((rsd / rsdPerEur) * 100) / 100
 }
+
+export function eurToRsd(eur: number, rsdPerEur: number): number {
+  if (rsdPerEur <= 0) return 0
+  return Math.round(eur * rsdPerEur)
+}

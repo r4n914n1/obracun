@@ -5,9 +5,12 @@ import type {
   TollEstimate,
 } from '../services/tollEstimate'
 import type { ForeignTollSummary, RouteLeg } from '../types'
-import { haversineMeters } from '../services/geo'
+import { distanceAlongPolyline, polylineLengthMeters } from '../services/geo'
+import { routeLabelEn, rampsLabelEn } from '../services/stationNamesEn'
+import { exportResultsPdf } from '../services/exportResultsPdf'
 import { useLocale } from '../i18n/LocaleContext'
 import type { MessageKey } from '../i18n/messages'
+import { useState } from 'react'
 
 const COUNTRY_FALLBACK: Record<string, string> = {
   SRB: 'Srbija',
@@ -49,68 +52,74 @@ type ChronoItem =
   | {
       kind: 'serbia'
       progress: number
+      sequence: number
       leg: PaidTollLeg
       cardNumber: number
     }
   | {
       kind: 'foreign'
       progress: number
+      sequence: number
       fare: AdjustedFare
     }
 
-interface ChronoGroup {
-  legLabel: string
-  items: ChronoItem[]
-  totalEur: number
+function stationMatchesName(
+  station: DetectedTollStation,
+  stationName: string,
+): boolean {
+  return (
+    station.cenovnikName === stationName ||
+    station.name === stationName ||
+    station.name.endsWith(stationName) ||
+    stationName.endsWith(station.name.replace(/^NS\s+/i, ''))
+  )
 }
 
-function distanceAlongPolyline(
-  coordinates: [number, number][],
-  point: [number, number],
-): number {
-  if (coordinates.length < 2) return 0
-  let bestDist = Infinity
-  let bestAlong = 0
-  let along = 0
-  for (let i = 1; i < coordinates.length; i++) {
-    const a = coordinates[i - 1]
-    const b = coordinates[i]
-    const segLen = haversineMeters(a, b)
-    const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
-    const toMid = haversineMeters(point, mid)
-    const toA = haversineMeters(point, a)
-    const toB = haversineMeters(point, b)
-    const d = Math.min(toMid, toA, toB)
-    if (d < bestDist) {
-      bestDist = d
-      if (toA <= toB && toA <= toMid) bestAlong = along
-      else if (toB <= toA && toB <= toMid) bestAlong = along + segLen
-      else bestAlong = along + segLen / 2
-    }
-    along += segLen
-  }
-  return bestAlong
-}
-
+/**
+ * Place a Serbian ticket at the exit ramp (last station along the route leg).
+ * Entry would put return tickets (Preševo→BG) before foreign corridor tolls on
+ * the same long return section.
+ */
 function serbiaProgress(
   leg: PaidTollLeg,
   routeLeg: RouteLeg | undefined,
   detected: DetectedTollStation[],
   legOffset: number,
 ): number {
+  const legLength = routeLeg ? polylineLengthMeters(routeLeg.coordinates) : 0
+  const legEnd = legOffset + Math.max(legLength, 1)
+
+  let bestAlong = -1
   for (const stationName of leg.stations) {
-    const hit = detected.find(
-      (s) =>
-        s.cenovnikName === stationName ||
-        s.name === stationName ||
-        s.name.endsWith(stationName) ||
-        stationName.endsWith(s.name.replace(/^NS\s+/i, '')),
-    )
-    if (hit) return hit.distanceAlongRoute
+    for (const station of detected) {
+      if (!stationMatchesName(station, stationName)) continue
+      if (
+        station.distanceAlongRoute < legOffset - 50 ||
+        station.distanceAlongRoute > legEnd + 50
+      ) {
+        continue
+      }
+      if (station.distanceAlongRoute > bestAlong) {
+        bestAlong = station.distanceAlongRoute
+      }
+    }
   }
+  if (bestAlong >= 0) return bestAlong
+
   if (routeLeg && routeLeg.coordinates.length >= 2) {
+    let bestProjected = -1
+    for (const stationName of leg.stations) {
+      const anyHit = detected.find((s) => stationMatchesName(s, stationName))
+      if (!anyHit) continue
+      const along =
+        legOffset +
+        distanceAlongPolyline(routeLeg.coordinates, [anyHit.lat, anyHit.lng])
+      if (along > bestProjected) bestProjected = along
+    }
+    if (bestProjected >= 0) return bestProjected
     return legOffset
   }
+
   return legOffset
 }
 
@@ -119,6 +128,9 @@ function foreignProgress(
   routeLeg: RouteLeg | undefined,
   legOffset: number,
 ): number {
+  if (fare.progressMeters != null && Number.isFinite(fare.progressMeters)) {
+    return fare.progressMeters
+  }
   if (fare.lat == null || fare.lng == null || !routeLeg) {
     return legOffset + 1
   }
@@ -128,31 +140,23 @@ function foreignProgress(
   )
 }
 
-function buildChronologicalGroups(
+function buildChronologicalItems(
   routeLegs: RouteLeg[],
   paidLegs: PaidTollLeg[],
   foreignFares: AdjustedFare[],
   detected: DetectedTollStation[],
-  unknownLegLabel: string,
-): ChronoGroup[] {
-  const legByLabel = new Map<string, { leg: RouteLeg; offset: number; index: number }>()
+): ChronoItem[] {
+  const legByLabel = new Map<string, { leg: RouteLeg; offset: number }>()
   let offset = 0
-  for (let i = 0; i < routeLegs.length; i++) {
-    const leg = routeLegs[i]
+  for (const leg of routeLegs) {
     const label = routeLegLabelOf(leg)
-    legByLabel.set(label, { leg, offset, index: i })
-    const length = leg.coordinates.reduce((sum, point, idx) => {
-      if (idx === 0) return 0
-      return sum + haversineMeters(leg.coordinates[idx - 1], point)
-    }, 0)
-    offset += length
+    legByLabel.set(label, { leg, offset })
+    offset += polylineLengthMeters(leg.coordinates)
   }
 
-  let serbiaCard = 0
   const items: ChronoItem[] = []
 
   for (const leg of paidLegs) {
-    serbiaCard += 1
     const meta = leg.routeLegLabel ? legByLabel.get(leg.routeLegLabel) : undefined
     items.push({
       kind: 'serbia',
@@ -160,71 +164,48 @@ function buildChronologicalGroups(
         leg,
         meta?.leg,
         detected,
-        meta?.offset ?? offset + serbiaCard,
+        meta?.offset ?? offset + items.length,
       ),
+      sequence: 0,
       leg,
-      cardNumber: serbiaCard,
+      cardNumber: 0,
     })
   }
 
-  let foreignSeq = 0
   for (const fare of foreignFares) {
-    foreignSeq += 1
     const meta = fare.routeLegLabel ? legByLabel.get(fare.routeLegLabel) : undefined
     items.push({
       kind: 'foreign',
       progress: foreignProgress(
         fare,
         meta?.leg,
-        meta?.offset ?? offset + 100000 + foreignSeq,
+        meta?.offset ?? offset + 100000 + fare.sequence,
       ),
+      sequence: fare.sequence,
       fare,
     })
   }
 
-  items.sort((a, b) => a.progress - b.progress)
+  items.sort((a, b) => {
+    if (a.progress !== b.progress) return a.progress - b.progress
+    return a.sequence - b.sequence
+  })
 
-  const byLabel = new Map<string, ChronoGroup>()
-  const groupOrder: string[] = []
-
+  let serbiaCard = 0
   for (const item of items) {
-    const label =
-      item.kind === 'serbia'
-        ? item.leg.routeLegLabel ?? unknownLegLabel
-        : item.fare.routeLegLabel ?? unknownLegLabel
-    let group = byLabel.get(label)
-    if (!group) {
-      group = { legLabel: label, items: [], totalEur: 0 }
-      byLabel.set(label, group)
-      groupOrder.push(label)
-    }
-    group.items.push(item)
-    group.totalEur += item.kind === 'serbia' ? item.leg.eur : item.fare.netEur
-  }
-
-  for (const group of byLabel.values()) {
-    group.items.sort((a, b) => a.progress - b.progress)
-    group.totalEur = Math.round(group.totalEur * 100) / 100
-  }
-
-  const ordered: ChronoGroup[] = []
-  const used = new Set<string>()
-  for (const leg of routeLegs) {
-    const label = routeLegLabelOf(leg)
-    const group = byLabel.get(label)
-    if (group) {
-      ordered.push(group)
-      used.add(label)
-    }
-  }
-  for (const label of groupOrder) {
-    if (!used.has(label)) {
-      const group = byLabel.get(label)
-      if (group) ordered.push(group)
+    if (item.kind === 'serbia') {
+      serbiaCard += 1
+      item.cardNumber = serbiaCard
     }
   }
 
-  return ordered
+  return items
+}
+
+interface CountryCostRow {
+  code: string
+  tollEur: number
+  liters: number | null
 }
 
 interface ResultPanelProps {
@@ -235,6 +216,7 @@ interface ResultPanelProps {
   liters: number
   fuelPrice: number
   fuelCost: number
+  consumption: number
   serbiaTollEur: number
   foreignTollEur: number
   foreignDiscount: number
@@ -242,12 +224,11 @@ interface ResultPanelProps {
   driverFee: number
   operatingCostPerKm: number
   operatingCost: number
-  isTruck: boolean
-  hasForeignTolls: boolean
   toll: TollEstimate
   adjustedForeign: AdjustedForeignTolls | null
   foreignTolls: ForeignTollSummary | null
   routeLegs: RouteLeg[]
+  distanceByCountry: Record<string, number>
   exchangeRateLabel: string | null
 }
 
@@ -287,6 +268,7 @@ export function ResultPanel({
   liters,
   fuelPrice,
   fuelCost,
+  consumption,
   serbiaTollEur,
   foreignTollEur,
   foreignDiscount,
@@ -294,15 +276,15 @@ export function ResultPanel({
   driverFee,
   operatingCostPerKm,
   operatingCost,
-  isTruck,
-  hasForeignTolls,
   toll,
   adjustedForeign,
   foreignTolls,
   routeLegs,
+  distanceByCountry,
   exchangeRateLabel,
 }: ResultPanelProps) {
-  const { t, countryName } = useLocale()
+  const { t, countryName, numberLocale } = useLocale()
+  const [pdfError, setPdfError] = useState<string | null>(null)
   const tollTotal = serbiaTollEur + foreignTollEur
 
   function formatDuration(seconds: number): string {
@@ -314,14 +296,13 @@ export function ResultPanel({
     return `${hours} ${t('hour')} ${minutes} ${t('min')}`
   }
 
-  const chronoGroups = buildChronologicalGroups(
+  const chronoItems = buildChronologicalItems(
     routeLegs,
     toll.paidLegs,
     adjustedForeign?.fares ?? [],
     toll.detectedStations,
-    t('unknownLeg'),
   )
-  const itemCount = chronoGroups.reduce((sum, g) => sum + g.items.length, 0)
+  const itemCount = chronoItems.length
   const categoryKey = CATEGORY_KEYS[categoryCode]
   const categoryLabel = categoryKey ? t(categoryKey) : toll.categoryLabel
 
@@ -331,8 +312,174 @@ export function ResultPanel({
       : (COUNTRY_FALLBACK[code] ?? code)
   }
 
+  function litersForCountry(code: string): number | null {
+    const meters = distanceByCountry[code]
+    if (meters == null || meters <= 0 || !Number.isFinite(consumption)) return null
+    return Math.round(((meters / 1000) * consumption) / 100 * 10) / 10
+  }
+
+  const countryRows: CountryCostRow[] = []
+  if (serbiaTollEur > 0 || (distanceByCountry.SRB ?? 0) > 0) {
+    countryRows.push({
+      code: 'SRB',
+      tollEur: serbiaTollEur,
+      liters: litersForCountry('SRB'),
+    })
+  }
+  for (const entry of adjustedForeign?.byCountry ?? []) {
+    countryRows.push({
+      code: entry.country,
+      tollEur: entry.netEur,
+      liters: litersForCountry(entry.country),
+    })
+  }
+  // Countries with distance but no toll entry yet (rare).
+  for (const [code, meters] of Object.entries(distanceByCountry)) {
+    if (meters <= 0) continue
+    if (countryRows.some((r) => r.code === code)) continue
+    if (code === 'SRB') continue
+    countryRows.push({ code, tollEur: 0, liters: litersForCountry(code) })
+  }
+
+  function handleExportPdf() {
+    setPdfError(null)
+    try {
+      const summaryRows = [
+        {
+          label: t('fuelRow', {
+            liters: liters.toFixed(1),
+            price: fuelPrice,
+          }),
+          value: formatEur(fuelCost),
+        },
+        { label: t('tollTotal'), value: formatEur(tollTotal) },
+      ]
+      if (foreignDiscount > 0) {
+        summaryRows.push({
+          label: `↳ ${t('discount')}`,
+          value: `−${formatEur(foreignDiscount)}`,
+        })
+      }
+      if (foreignVatRemoved > 0) {
+        summaryRows.push({
+          label: `↳ ${t('vatDeducted')}`,
+          value: `−${formatEur(foreignVatRemoved)}`,
+        })
+      }
+      summaryRows.push(
+        { label: t('driverFeeRow'), value: formatEur(driverFee) },
+        {
+          label: t('operatingRow', {
+            distance: formatDistance(distanceMeters),
+            rate: operatingCostPerKm,
+          }),
+          value: formatEur(operatingCost),
+        },
+      )
+
+      const countryPdfRows = countryRows.map((row) => ({
+        label: nameOf(row.code),
+        value:
+          row.liters != null
+            ? t('countryTollFuel', {
+                toll: formatEur(row.tollEur),
+                liters: row.liters.toFixed(1),
+              })
+            : t('countryTollFuelNoDist', { toll: formatEur(row.tollEur) }),
+      }))
+
+      const chronoPdfItems = chronoItems.map((item) => {
+        if (item.kind === 'serbia') {
+          const details = [
+            `${t('routeEn')} ${routeLabelEn(item.leg.from, item.leg.to)}`,
+          ]
+          if (item.leg.stations.length > 0) {
+            details.push(`${t('ramps')} ${item.leg.stations.join(' → ')}`)
+            details.push(`${t('rampsEn')} ${rampsLabelEn(item.leg.stations)}`)
+          }
+          return {
+            tag:
+              item.leg.kind === 'bypass'
+                ? `SRB · ${t('bypass')}`
+                : `SRB · ${t('cardN', { n: item.cardNumber })}`,
+            price: formatEur(item.leg.eur),
+            main: `${item.leg.from} → ${item.leg.to}`,
+            details,
+          }
+        }
+        const detailParts = [nameOf(item.fare.country)]
+        if (item.fare.system && item.fare.system !== item.fare.name) {
+          detailParts.push(item.fare.system)
+        }
+        if (item.fare.discountPercent > 0) {
+          detailParts.push(t('discountPct', { pct: item.fare.discountPercent }))
+        }
+        if (item.fare.netEur !== item.fare.grossEur) {
+          detailParts.push(
+            t('hereGross', { amount: formatEur(item.fare.grossEur) }),
+          )
+        }
+        return {
+          tag: `${item.fare.country} · ${
+            item.fare.kind === 'tunnel' ? t('tunnel') : t('toll')
+          }`,
+          price: formatEur(item.fare.netEur),
+          main: item.fare.name,
+          details: [detailParts.join(' · ')],
+        }
+      })
+
+      const notes: string[] = [t('disclaimer'), t('formulaNote')]
+      if (exchangeRateLabel) notes.push(exchangeRateLabel)
+      if (toll.bypass.note) notes.push(toll.bypass.note)
+      if (foreignTolls?.hasUnconverted) notes.push(t('unconverted'))
+
+      exportResultsPdf({
+        title: t('pdfReportTitle'),
+        generatedLabel: t('pdfGenerated'),
+        generatedAt: new Date().toLocaleString(numberLocale, {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }),
+        heroLabel: t('totalApprox'),
+        grandTotal: formatEur(grandTotal),
+        categoryLabel,
+        distance: formatDistance(distanceMeters),
+        duration: formatDuration(durationSeconds),
+        routeLines: routeLegs.map((leg) => `${leg.fromLabel} → ${leg.toLabel}`),
+        summaryTitle: t('costSummary'),
+        summaryRows,
+        countryTitle: countryRows.length > 0 ? t('tollByCountry') : null,
+        countryRows: countryPdfRows,
+        countryHint: countryRows.length > 0 ? t('countryFuelHint') : null,
+        chronoTitle:
+          itemCount > 0 ? t('tollChrono', { count: itemCount }) : null,
+        chronoItems: chronoPdfItems,
+        notesTitle: t('notesSummary'),
+        notes,
+      })
+    } catch {
+      setPdfError(t('exportPdfBlocked'))
+    }
+  }
+
   return (
     <div className="result-panel">
+      <div className="result-toolbar">
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm result-export-pdf"
+          title={t('exportPdfTitle')}
+          onClick={handleExportPdf}
+        >
+          {t('exportPdf')}
+        </button>
+        {pdfError ? (
+          <span className="result-export-error" role="alert">
+            {pdfError}
+          </span>
+        ) : null}
+      </div>
       <header className="result-hero">
         <p className="result-hero-label">{t('totalApprox')}</p>
         <p className="result-hero-value">{formatEur(grandTotal)}</p>
@@ -354,18 +501,6 @@ export function ResultPanel({
             value={formatEur(fuelCost)}
           />
           <SummaryRow label={t('tollTotal')} value={formatEur(tollTotal)} />
-          <SummaryRow
-            label={`↳ ${t('serbia')}`}
-            value={formatEur(serbiaTollEur)}
-            muted
-          />
-          {hasForeignTolls ? (
-            <SummaryRow
-              label={`↳ ${isTruck ? t('abroadNoVat') : t('abroad')}`}
-              value={formatEur(foreignTollEur)}
-              muted
-            />
-          ) : null}
           {foreignDiscount > 0 ? (
             <SummaryRow
               label={`↳ ${t('discount')}`}
@@ -393,22 +528,28 @@ export function ResultPanel({
         </div>
       </section>
 
-      {serbiaTollEur > 0 || (adjustedForeign?.byCountry.length ?? 0) > 0 ? (
+      {countryRows.length > 0 ? (
         <section className="result-block">
           <h3 className="result-block-title">{t('tollByCountry')}</h3>
           <div className="result-summary">
-            {serbiaTollEur > 0 ? (
-              <SummaryRow label={t('serbia')} value={formatEur(serbiaTollEur)} />
-            ) : null}
-            {adjustedForeign?.byCountry.map((entry) => (
+            {countryRows.map((row) => (
               <SummaryRow
-                key={`country-sum-${entry.country}`}
-                label={`${nameOf(entry.country)} (${entry.country})`}
-                value={formatEur(entry.netEur)}
+                key={row.code}
+                label={nameOf(row.code)}
+                value={
+                  row.liters != null
+                    ? t('countryTollFuel', {
+                        toll: formatEur(row.tollEur),
+                        liters: row.liters.toFixed(1),
+                      })
+                    : t('countryTollFuelNoDist', {
+                        toll: formatEur(row.tollEur),
+                      })
+                }
               />
             ))}
-            <SummaryRow label={t('tollTotal')} value={formatEur(tollTotal)} />
           </div>
+          <p className="result-footnote">{t('countryFuelHint')}</p>
         </section>
       ) : null}
 
@@ -417,73 +558,71 @@ export function ResultPanel({
           <h3 className="result-block-title">
             {t('tollChrono', { count: itemCount })}
           </h3>
-          <div className="result-leg-groups">
-            {chronoGroups.map((group) => (
-              <div className="result-leg-group" key={group.legLabel}>
-                <div className="result-leg-header">
-                  <span>{group.legLabel}</span>
-                  <strong>{formatEur(group.totalEur)}</strong>
-                </div>
-                <div className="result-card-list">
-                  {group.items.map((item, index) =>
-                    item.kind === 'serbia' ? (
-                      <article
-                        className="result-card"
-                        key={`srb-${item.leg.from}-${item.leg.to}-${index}`}
-                      >
-                        <div className="result-card-top">
-                          <span className="result-card-tag">
-                            SRB ·{' '}
-                            {item.leg.kind === 'bypass'
-                              ? t('bypass')
-                              : t('cardN', { n: item.cardNumber })}
-                          </span>
-                          <strong className="result-card-price">
-                            {formatEur(item.leg.eur)}
-                          </strong>
-                        </div>
-                        <p className="result-card-main">
-                          {item.leg.from} → {item.leg.to}
-                        </p>
-                        {item.leg.stations.length > 0 ? (
-                          <p className="result-card-detail">
-                            {t('ramps')} {item.leg.stations.join(' → ')}
-                          </p>
-                        ) : null}
-                      </article>
-                    ) : (
-                      <article
-                        className="result-card"
-                        key={`ino-${item.fare.country}-${item.fare.name}-${index}`}
-                      >
-                        <div className="result-card-top">
-                          <span className="result-card-tag">
-                            {item.fare.country} ·{' '}
-                            {item.fare.kind === 'tunnel' ? t('tunnel') : t('toll')}
-                          </span>
-                          <strong className="result-card-price">
-                            {formatEur(item.fare.netEur)}
-                          </strong>
-                        </div>
-                        <p className="result-card-main">{item.fare.name}</p>
-                        <p className="result-card-detail">
-                          {nameOf(item.fare.country)}
-                          {item.fare.system && item.fare.system !== item.fare.name
-                            ? ` · ${item.fare.system}`
-                            : ''}
-                          {item.fare.discountPercent > 0
-                            ? ` · ${t('discountPct', { pct: item.fare.discountPercent })}`
-                            : ''}
-                          {item.fare.netEur !== item.fare.grossEur
-                            ? ` · ${t('hereGross', { amount: formatEur(item.fare.grossEur) })}`
-                            : ''}
-                        </p>
-                      </article>
-                    ),
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="result-card-list">
+            {chronoItems.map((item, index) =>
+              item.kind === 'serbia' ? (
+                <article
+                  className="result-card"
+                  key={`srb-${item.leg.from}-${item.leg.to}-${index}`}
+                >
+                  <div className="result-card-top">
+                    <span className="result-card-tag">
+                      SRB ·{' '}
+                      {item.leg.kind === 'bypass'
+                        ? t('bypass')
+                        : t('cardN', { n: item.cardNumber })}
+                    </span>
+                    <strong className="result-card-price">
+                      {formatEur(item.leg.eur)}
+                    </strong>
+                  </div>
+                  <p className="result-card-main">
+                    {item.leg.from} → {item.leg.to}
+                  </p>
+                  <p className="result-card-detail">
+                    {t('routeEn')} {routeLabelEn(item.leg.from, item.leg.to)}
+                  </p>
+                  {item.leg.stations.length > 0 ? (
+                    <>
+                      <p className="result-card-detail">
+                        {t('ramps')} {item.leg.stations.join(' → ')}
+                      </p>
+                      <p className="result-card-detail">
+                        {t('rampsEn')} {rampsLabelEn(item.leg.stations)}
+                      </p>
+                    </>
+                  ) : null}
+                </article>
+              ) : (
+                <article
+                  className="result-card"
+                  key={`ino-${item.fare.country}-${item.fare.name}-${index}`}
+                >
+                  <div className="result-card-top">
+                    <span className="result-card-tag">
+                      {item.fare.country} ·{' '}
+                      {item.fare.kind === 'tunnel' ? t('tunnel') : t('toll')}
+                    </span>
+                    <strong className="result-card-price">
+                      {formatEur(item.fare.netEur)}
+                    </strong>
+                  </div>
+                  <p className="result-card-main">{item.fare.name}</p>
+                  <p className="result-card-detail">
+                    {nameOf(item.fare.country)}
+                    {item.fare.system && item.fare.system !== item.fare.name
+                      ? ` · ${item.fare.system}`
+                      : ''}
+                    {item.fare.discountPercent > 0
+                      ? ` · ${t('discountPct', { pct: item.fare.discountPercent })}`
+                      : ''}
+                    {item.fare.netEur !== item.fare.grossEur
+                      ? ` · ${t('hereGross', { amount: formatEur(item.fare.grossEur) })}`
+                      : ''}
+                  </p>
+                </article>
+              ),
+            )}
           </div>
           {foreignTolls?.hasUnconverted ? (
             <p className="result-footnote">{t('unconverted')}</p>

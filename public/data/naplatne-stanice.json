@@ -1,14 +1,23 @@
 {
   "source": "https://www.putevi-srbije.rs/index.php/mapa-naplatnih-stanica-1",
-  "extractedAt": "2026-07-15T12:18:56.775Z",
+  "extractedAt": "2026-07-30T11:11:26.813Z",
   "count": 77,
   "stations": [
     {
-      "id": "54",
+      "id": "53",
       "name": "NS Adaševci",
       "lat": 45.0501133,
       "lng": 19.209708,
       "road": "Auto-put A3",
+      "city": null,
+      "country": "Srbija"
+    },
+    {
+      "id": "76",
+      "name": "NS Adrani",
+      "lat": 43.761610672958504,
+      "lng": 20.655024307058568,
+      "road": "Auto-put A5",
       "city": null,
       "country": "Srbija"
     },
@@ -49,7 +58,7 @@
       "country": "Srbija"
     },
     {
-      "id": "60",
+      "id": "59",
       "name": "NS Bela Palanka",
       "lat": 43.2337276,
       "lng": 22.3165,
@@ -103,7 +112,7 @@
       "country": "Srbija"
     },
     {
-      "id": "49",
+      "id": "48",
       "name": "NS Čačak (Pakovraće)",
       "lat": 43.9031025,
       "lng": 20.2616419,
@@ -112,7 +121,7 @@
       "country": "Srbija"
     },
     {
-      "id": "64",
+      "id": "63",
       "name": "NS Ćićevac",
       "lat": 43.7227547,
       "lng": 21.4208331,
@@ -130,7 +139,7 @@
       "country": "Srbija"
     },
     {
-      "id": "63",
+      "id": "62",
       "name": "NS Dimitrovgrad",
       "lat": 43.0219083,
       "lng": 22.7364149,
@@ -166,7 +175,7 @@
       "country": "Srbija"
     },
     {
-      "id": "69",
+      "id": "67",
       "name": "NS Hrtkovci",
       "lat": 44.8595055,
       "lng": 19.7747472,
@@ -202,7 +211,7 @@
       "country": "Srbija"
     },
     {
-      "id": "67",
+      "id": "65",
       "name": "NS Koševi",
       "lat": 43.5878969,
       "lng": 21.25298,
@@ -220,16 +229,7 @@
       "country": "Srbija"
     },
     {
-      "id": "65",
-      "name": "NS Kruševac istok",
-      "lat": 43.605255224579075,
-      "lng": 21.334327689443647,
-      "road": "Auto-put A5",
-      "city": null,
-      "country": "Srbija"
-    },
-    {
-      "id": "66",
+      "id": "64",
       "name": "NS Kruševac zapad",
       "lat": 43.6078634,
       "lng": 21.3083408,
@@ -238,7 +238,7 @@
       "country": "Srbija"
     },
     {
-      "id": "53",
+      "id": "52",
       "name": "NS Kuzmin",
       "lat": 45.0356639,
       "lng": 19.3862195,
@@ -292,7 +292,7 @@
       "country": "Srbija"
     },
     {
-      "id": "gen-5",
+      "id": "75",
       "name": "NS Lučani",
       "lat": 43.83675818661708,
       "lng": 20.156942146000556,
@@ -301,7 +301,7 @@
       "country": "Srbija"
     },
     {
-      "id": "57",
+      "id": "56",
       "name": "NS Malča",
       "lat": 43.31918,
       "lng": 22.0198772,
@@ -346,7 +346,7 @@
       "country": "Srbija"
     },
     {
-      "id": "55",
+      "id": "54",
       "name": "NS Morović",
       "lat": 45.0460388,
       "lng": 19.2102103,
@@ -355,7 +355,7 @@
       "country": "Srbija"
     },
     {
-      "id": "58",
+      "id": "57",
       "name": "NS Niš istok",
       "lat": 43.3421859,
       "lng": 21.9363022,
@@ -373,7 +373,7 @@
       "country": "Srbija"
     },
     {
-      "id": "59",
+      "id": "58",
       "name": "NS Niš sever",
       "lat": 43.3498023,
       "lng": 21.8580036,
@@ -391,7 +391,7 @@
       "country": "Srbija"
     },
     {
-      "id": "71",
+      "id": "69",
       "name": "NS Novi Sad sever",
       "lat": 45.3134231,
       "lng": 19.7998316,
@@ -418,7 +418,7 @@
       "country": "Srbija"
     },
     {
-      "id": "51",
+      "id": "50",
       "name": "NS Pećinci",
       "lat": 44.9187889,
       "lng": 19.9530736,
@@ -427,7 +427,7 @@
       "country": "Srbija"
     },
     {
-      "id": "62",
+      "id": "61",
       "name": "NS Pirot istok",
       "lat": 43.1235771,
       "lng": 22.61865,
@@ -436,7 +436,7 @@
       "country": "Srbija"
     },
     {
-      "id": "61",
+      "id": "60",
       "name": "NS Pirot zapad",
       "lat": 43.1883459,
       "lng": 22.5665577,
@@ -463,11 +463,11 @@
       "country": "Srbija"
     },
     {
-      "id": "48",
-      "name": "NS Preljina",
-      "lat": 43.9173205,
-      "lng": 20.4005788,
-      "road": "Auto-put A2",
+      "id": "77",
+      "name": "NS Preljina Konjevići",
+      "lat": 43.89885732886216,
+      "lng": 20.408637181082746,
+      "road": "Auto-put A5",
       "city": null,
       "country": "Srbija"
     },
@@ -481,7 +481,7 @@
       "country": "Srbija"
     },
     {
-      "id": "gen-6",
+      "id": "74",
       "name": "NS Prilipac",
       "lat": 43.8245042889927,
       "lng": 20.083435983189773,
@@ -499,7 +499,7 @@
       "country": "Srbija"
     },
     {
-      "id": "68",
+      "id": "66",
       "name": "NS Ruma",
       "lat": 44.9692038,
       "lng": 19.8087058,
@@ -508,7 +508,7 @@
       "country": "Srbija"
     },
     {
-      "id": "70",
+      "id": "68",
       "name": "NS Šabac",
       "lat": 44.8082839,
       "lng": 19.7188302,
@@ -517,7 +517,7 @@
       "country": "Srbija"
     },
     {
-      "id": "56",
+      "id": "55",
       "name": "NS Šid",
       "lat": 45.048643,
       "lng": 19.19245,
@@ -526,7 +526,7 @@
       "country": "Srbija"
     },
     {
-      "id": "50",
+      "id": "49",
       "name": "NS Šimanovci",
       "lat": 44.8822256,
       "lng": 20.1137982,
@@ -544,7 +544,7 @@
       "country": "Srbija"
     },
     {
-      "id": "52",
+      "id": "51",
       "name": "NS Sremska Mitrovica",
       "lat": 44.9954043,
       "lng": 19.6450541,
@@ -580,11 +580,11 @@
       "country": "Srbija"
     },
     {
-      "id": "72",
+      "id": "70",
       "name": "NS Trstenik",
       "lat": 43.61946325493339,
       "lng": 21.022275560382546,
-      "road": "Auti-put A5",
+      "road": "Auto-put A5",
       "city": null,
       "country": "Srbija"
     },
@@ -607,11 +607,11 @@
       "country": "Srbija"
     },
     {
-      "id": "74",
+      "id": "72",
       "name": "NS Velika Drenova",
       "lat": 43.61528103277899,
       "lng": 21.171779291643762,
-      "road": "Auti-put A5",
+      "road": "Auto-put A5",
       "city": null,
       "country": null
     },
@@ -652,11 +652,11 @@
       "country": "Srbija"
     },
     {
-      "id": "75",
+      "id": "73",
       "name": "NS Vrba",
       "lat": 43.70156092667137,
       "lng": 20.778613753516606,
-      "road": "Auti-put A5",
+      "road": "Auto-put A5",
       "city": null,
       "country": null
     },
@@ -670,11 +670,11 @@
       "country": "Srbija"
     },
     {
-      "id": "73",
+      "id": "71",
       "name": "NS Vrnjačka Banja",
       "lat": 43.64926817300584,
       "lng": 20.911321467194675,
-      "road": "Auti-put A5",
+      "road": "Auto-put A5",
       "city": null,
       "country": null
     },

@@ -8,6 +8,10 @@ interface PlaceInputProps {
   placeholder?: string
   value: Location | null
   onChange: (location: Location | null) => void
+  /** Hide visible label (still used for a11y via aria-label). */
+  compact?: boolean
+  locked?: boolean
+  onLockedInteract?: () => void
 }
 
 export function PlaceInput({
@@ -15,6 +19,9 @@ export function PlaceInput({
   placeholder,
   value,
   onChange,
+  compact = false,
+  locked = false,
+  onLockedInteract,
 }: PlaceInputProps) {
   const { t, locale, ready: localeReady } = useLocale()
   const resolvedPlaceholder = placeholder ?? t('placePlaceholder')
@@ -35,7 +42,7 @@ export function PlaceInput({
   }, [value])
 
   useEffect(() => {
-    if (!localeReady) return
+    if (!localeReady || locked) return
 
     let cancelled = false
     let listener: google.maps.MapsEventListener | null = null
@@ -85,24 +92,44 @@ export function PlaceInput({
     }
     // Init once locale is known; Maps language cannot swap without full page reload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localeReady])
+  }, [localeReady, locked])
+
+  function handleLockedInteract() {
+    if (!locked) return
+    onLockedInteract?.()
+  }
 
   return (
-    <label className="field" htmlFor={inputId}>
-      <span className="field-label">{label}</span>
+    <label className={`field${compact ? ' field-compact' : ''}`} htmlFor={inputId}>
+      {compact ? (
+        <span className="visually-hidden">{label}</span>
+      ) : (
+        <span className="field-label">{label}</span>
+      )}
       <input
         id={inputId}
         ref={inputRef}
-        className="field-input"
+        className={`field-input${locked ? ' field-input-locked' : ''}`}
         type="text"
         value={text}
-        placeholder={ready ? resolvedPlaceholder : t('placesLoading')}
-        disabled={!ready}
+        placeholder={
+          locked
+            ? t('placeLoginRequired')
+            : ready
+              ? resolvedPlaceholder
+              : t('placesLoading')
+        }
+        disabled={!locked && !ready}
+        readOnly={locked}
+        aria-label={label}
         onChange={(event) => {
+          if (locked) return
           setText(event.target.value)
           if (value) onChange(null)
           setError(null)
         }}
+        onFocus={handleLockedInteract}
+        onClick={handleLockedInteract}
         onKeyDown={(event) => {
           if (event.key === 'Enter') event.preventDefault()
         }}

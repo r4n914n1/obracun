@@ -83,7 +83,7 @@ exports.createCheckoutSession = (0, https_1.onCall)({ secrets: paypalSecrets }, 
     const user = await (0, billingCore_1.ensureUserDoc)(uid);
     const paypalPlanId = (0, paypalApi_1.paypalPlanIdForAppPlan)(appPlanId);
     const base = paypalApi_1.appUrl.value().replace(/\/?$/, '/');
-    const returnUrl = `${base}?checkout=success`;
+    const returnUrl = `${base}?checkout=success&plan=${encodeURIComponent(appPlanId)}`;
     const cancelUrl = `${base}?checkout=cancel`;
     const activeNow = (0, billingCore_1.isSubscriptionActive)(user) && !(0, billingCore_1.currentPeriodExhausted)(user);
     if (activeNow && user.planId === appPlanId && !(0, billingCore_1.hasQueuedPlan)(user)) {

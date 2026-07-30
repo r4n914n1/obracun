@@ -11,10 +11,18 @@ import {
   startBillingPortal,
   startCheckout,
 } from '../services/billing'
+import { rememberCheckoutPlan } from '../services/googleAds'
+import {
+  eurToRsd,
+  fetchNbsMiddleRsdPerEur,
+  type ExchangeRate,
+} from '../services/exchangeRate'
 import type { QuotaSnapshot } from '../types/billing'
 import { BugReportButton } from './BugReportButton'
 import { LanguageToggle } from './LanguageToggle'
-import { useState } from 'react'
+import { AdUnit } from './AdUnit'
+import { ConfirmDialog } from './ConfirmDialog'
+import { useEffect, useState } from 'react'
 
 interface PricingPageProps {
   onBack: () => void
@@ -26,6 +34,7 @@ interface PricingPageProps {
 }
 
 const PLAN_BLURB: Record<string, MessageKey> = {
+  'lite-1m': 'planLiteBlurb',
   'starter-1m': 'planStarterBlurb',
   'standard-1m': 'planStandardBlurb',
   'pro-1m': 'planProBlurb',
@@ -35,6 +44,32 @@ const PLAN_BLURB: Record<string, MessageKey> = {
 }
 
 const ALL_PLANS = [...MONTHLY_PLANS, ...QUARTERLY_PLANS]
+
+function PayPalMark({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      className={`paypal-mark ${className}`.trim()}
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        fill="#003087"
+        d="M7.2 21.2H4.7c-.4 0-.7-.3-.6-.7L6.5 3.6c.1-.4.4-.7.8-.7h6.7c2.2 0 3.8.5 4.7 1.6.8 1 1 2.4.6 4.1-.1.5-.3 1-.5 1.4l-.1.2c-1 2.8-3.3 3.8-6.4 3.8H9.6c-.4 0-.7.3-.8.7l-.8 5.1c0 .2-.2.4-.4.4H7.2z"
+      />
+      <path
+        fill="#009CDE"
+        d="M19.3 8.6c0 .2-.1.3-.1.5-1.1 3.2-3.5 4.4-7 4.4h-1.7c-.4 0-.8.3-.9.7l-1 6.4c0 .2.1.4.3.4h2.4c.3 0 .6-.2.7-.6l.1-.3.6-3.6.0-.2c.1-.4.4-.6.8-.6h.5c3.2 0 5.7-1.3 6.4-5 .3-1.5.1-2.8-.6-3.7-.2-.3-.5-.5-.8-.7.1.3.2.7.2 1.1z"
+      />
+      <path
+        fill="#012169"
+        d="M18.4 8.1c-.2-.1-.4-.1-.6-.2-.2 0-.4-.1-.6-.1h-5.3c-.1 0-.3 0-.4.1-.3.1-.5.4-.5.7l-.9 5.9v.2c.1-.4.4-.7.8-.7h1.8c3.5 0 5.9-1.2 7-4.4.1-.2.1-.3.1-.5-.4-.3-.9-.6-1.4-.9z"
+      />
+    </svg>
+  )
+}
 
 function planLabel(planId: string | null | undefined): string {
   if (!planId) return '—'
@@ -50,6 +85,8 @@ function PlanCard({
   isCurrent,
   isSubscribed,
   onSubscribe,
+  wide = false,
+  exchangeRate,
 }: {
   plan: PricingPlan
   disabled: boolean
@@ -57,11 +94,14 @@ function PlanCard({
   isCurrent: boolean
   isSubscribed: boolean
   onSubscribe: (planId: string) => void
+  wide?: boolean
+  exchangeRate: ExchangeRate | null
 }) {
-  const { t, numberLocale } = useLocale()
+  const { locale, t, numberLocale } = useLocale()
   const periodKey: MessageKey =
     plan.period === 'month' ? 'periodMonth' : 'periodQuarter'
   const blurbKey = PLAN_BLURB[plan.id] ?? 'planStarterBlurb'
+  const showRsd = locale === 'sr' && exchangeRate != null
 
   let cta = t('subscribe')
   if (busy) {
@@ -74,7 +114,7 @@ function PlanCard({
 
   return (
     <article
-      className={`pricing-card${plan.featured ? ' is-featured' : ''}${isCurrent ? ' is-current' : ''}`}
+      className={`pricing-card${wide ? ' is-wide' : ''}${plan.featured ? ' is-featured' : ''}${isCurrent ? ' is-current' : ''}`}
     >
       {plan.featured && !isCurrent ? (
         <span className="pricing-badge">{t('recommended')}</span>
@@ -90,6 +130,16 @@ function PlanCard({
         <strong>{plan.priceEur} €</strong>
         <span> / {t(periodKey)}</span>
       </p>
+      {showRsd ? (
+        <p className="pricing-card-rsd">
+          {t('pricingApproxRsd', {
+            rsd: eurToRsd(plan.priceEur, exchangeRate.rsdPerEur).toLocaleString(
+              numberLocale,
+            ),
+            date: exchangeRate.date,
+          })}
+        </p>
+      ) : null}
       {plan.compareAtEur != null && plan.savingsEur != null ? (
         <p className="pricing-card-save">
           {t('insteadSave', {
@@ -111,7 +161,8 @@ function PlanCard({
         disabled={disabled || busy || isCurrent}
         onClick={() => onSubscribe(plan.id)}
       >
-        {cta}
+        {!isCurrent ? <PayPalMark /> : null}
+        <span>{cta}</span>
       </button>
     </article>
   )
@@ -148,17 +199,44 @@ export function PricingPage({
   onRequireLogin,
   onQuotaChange,
 }: PricingPageProps) {
-  const { t, numberLocale } = useLocale()
+  const { locale, t, numberLocale } = useLocale()
   const [busyPlanId, setBusyPlanId] = useState<string | null>(null)
   const [portalBusy, setPortalBusy] = useState(false)
   const [cancelBusy, setCancelBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [upgradePlanId, setUpgradePlanId] = useState<string | null>(null)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchNbsMiddleRsdPerEur().then((rate) => {
+      if (!cancelled) setExchangeRate(rate)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const checkoutBusy = busyPlanId !== null
   const actionBusy = checkoutBusy || portalBusy || cancelBusy
   const isSubscribed = quota?.plan === 'subscribed'
   const currentPlanId = quota?.planId ?? null
+
+  async function beginCheckout(planId: string) {
+    setError(null)
+    setNotice(null)
+    setBusyPlanId(planId)
+    try {
+      rememberCheckoutPlan(planId)
+      const { url } = await startCheckout(planId)
+      window.location.href = url
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('genericError'))
+      setBusyPlanId(null)
+    }
+  }
 
   async function handleSubscribe(planId: string) {
     if (!isAuthenticated) {
@@ -168,20 +246,11 @@ export function PricingPage({
     if (currentPlanId === planId) return
 
     if (isSubscribed && quota && quota.remaining > 0) {
-      const ok = window.confirm(t('upgradeHoldConfirm'))
-      if (!ok) return
+      setUpgradePlanId(planId)
+      return
     }
 
-    setError(null)
-    setNotice(null)
-    setBusyPlanId(planId)
-    try {
-      const { url } = await startCheckout(planId)
-      window.location.href = url
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('genericError'))
-      setBusyPlanId(null)
-    }
+    await beginCheckout(planId)
   }
 
   async function handlePortal() {
@@ -196,8 +265,7 @@ export function PricingPage({
     }
   }
 
-  async function handleCancel() {
-    if (!window.confirm(t('cancelConfirm'))) return
+  async function runCancel() {
     setError(null)
     setNotice(null)
     setCancelBusy(true)
@@ -205,6 +273,7 @@ export function PricingPage({
       const next = await cancelUserSubscription()
       onQuotaChange?.(next)
       setNotice(t('cancelSuccess'))
+      setCancelOpen(false)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('genericError'))
     } finally {
@@ -245,6 +314,14 @@ export function PricingPage({
         <p className="pricing-hero">
           {t('pricingHero', { trial: TRIAL_CALCULATIONS })}
         </p>
+
+        <section className="pricing-payment" aria-labelledby="pricing-payment-title">
+          <h2 id="pricing-payment-title">{t('pricingPaymentTitle')}</h2>
+          <p>{t('pricingPaymentBody')}</p>
+          {locale === 'sr' ? (
+            <p className="pricing-payment-disclaimer">{t('pricingFxDisclaimer')}</p>
+          ) : null}
+        </section>
 
         {!isAuthenticated ? (
           <p className="pricing-login-hint">{t('loginToSubscribe')}</p>
@@ -294,17 +371,20 @@ export function PricingPage({
             <div className="pricing-manage-actions">
               <button
                 type="button"
-                className="btn btn-secondary"
+                className="btn btn-secondary btn-with-paypal"
                 disabled={actionBusy}
                 onClick={() => void handlePortal()}
               >
-                {portalBusy ? t('openingPortal') : t('manageSubscription')}
+                <PayPalMark />
+                <span>
+                  {portalBusy ? t('openingPortal') : t('manageSubscription')}
+                </span>
               </button>
               <button
                 type="button"
                 className="btn btn-danger"
                 disabled={actionBusy || Boolean(quota?.cancelAtPeriodEnd)}
-                onClick={() => void handleCancel()}
+                onClick={() => setCancelOpen(true)}
               >
                 {cancelBusy ? t('cancellingSubscription') : t('cancelSubscription')}
               </button>
@@ -324,25 +404,45 @@ export function PricingPage({
           </p>
         ) : null}
 
-        <section className="pricing-trial">
-          <h2>{t('pricingTrialTitle')}</h2>
-          <TrialParagraph />
-        </section>
+        {!isAuthenticated ? (
+          <section className="pricing-trial">
+            <h2>{t('pricingTrialTitle')}</h2>
+            <TrialParagraph />
+          </section>
+        ) : null}
 
         <section className="pricing-section">
           <h2>{t('pricingMonthly')}</h2>
           <div className="pricing-grid">
-            {MONTHLY_PLANS.map((plan) => (
-              <PlanCard
-                key={plan.id}
-                plan={plan}
-                disabled={actionBusy}
-                busy={busyPlanId === plan.id}
-                isCurrent={currentPlanId === plan.id}
-                isSubscribed={Boolean(isSubscribed)}
-                onSubscribe={(planId) => void handleSubscribe(planId)}
-              />
-            ))}
+            {MONTHLY_PLANS.filter((plan) => plan.id === 'lite-1m').map(
+              (plan) => (
+                <PlanCard
+                  key={plan.id}
+                  plan={plan}
+                  wide
+                  disabled={actionBusy}
+                  busy={busyPlanId === plan.id}
+                  isCurrent={currentPlanId === plan.id}
+                  isSubscribed={Boolean(isSubscribed)}
+                  onSubscribe={(planId) => void handleSubscribe(planId)}
+                  exchangeRate={exchangeRate}
+                />
+              ),
+            )}
+            {MONTHLY_PLANS.filter((plan) => plan.id !== 'lite-1m').map(
+              (plan) => (
+                <PlanCard
+                  key={plan.id}
+                  plan={plan}
+                  disabled={actionBusy}
+                  busy={busyPlanId === plan.id}
+                  isCurrent={currentPlanId === plan.id}
+                  isSubscribed={Boolean(isSubscribed)}
+                  onSubscribe={(planId) => void handleSubscribe(planId)}
+                  exchangeRate={exchangeRate}
+                />
+              ),
+            )}
           </div>
         </section>
 
@@ -359,6 +459,7 @@ export function PricingPage({
                 isCurrent={currentPlanId === plan.id}
                 isSubscribed={Boolean(isSubscribed)}
                 onSubscribe={(planId) => void handleSubscribe(planId)}
+                exchangeRate={exchangeRate}
               />
             ))}
           </div>
@@ -393,7 +494,51 @@ export function PricingPage({
             </div>
           </dl>
         </section>
+
+        <p className="pricing-legal">
+          <a href="/privacy" className="link-btn">
+            {t('privacyLink')}
+          </a>
+        </p>
+
+        <div className="pricing-ad-wrap">
+          <AdUnit slot={import.meta.env.VITE_ADSENSE_SLOT_PRICING} />
+        </div>
       </div>
+
+      <ConfirmDialog
+        open={upgradePlanId !== null}
+        title={t('upgradeHoldTitle')}
+        message={t('upgradeHoldConfirm')}
+        cancelLabel={t('dialogBack')}
+        confirmLabel={t('dialogContinuePayPal')}
+        busy={checkoutBusy}
+        onCancel={() => {
+          if (!checkoutBusy) setUpgradePlanId(null)
+        }}
+        onConfirm={() => {
+          if (!upgradePlanId) return
+          const planId = upgradePlanId
+          setUpgradePlanId(null)
+          void beginCheckout(planId)
+        }}
+      />
+
+      <ConfirmDialog
+        open={cancelOpen}
+        title={t('cancelConfirmTitle')}
+        message={t('cancelConfirm')}
+        cancelLabel={t('dialogBack')}
+        confirmLabel={t('cancelConfirmYes')}
+        danger
+        busy={cancelBusy}
+        onCancel={() => {
+          if (!cancelBusy) setCancelOpen(false)
+        }}
+        onConfirm={() => {
+          void runCancel()
+        }}
+      />
     </div>
   )
 }

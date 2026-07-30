@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LoginScreen } from './components/LoginScreen'
 import { PricingPage } from './components/PricingPage'
 import { RouteForm } from './components/RouteForm'
@@ -6,11 +6,12 @@ import { ResultPanel } from './components/ResultPanel'
 import { RouteMap } from './components/RouteMap'
 import { LanguageToggle } from './components/LanguageToggle'
 import {
+  getAccountId,
   isAuthenticated,
   logout,
   waitForAuthReady,
 } from './services/auth'
-import { fetchRoute } from './services/hereRouting'
+import { fetchRoute, mergeRouteResults } from './services/hereRouting'
 import { fetchNbsMiddleRsdPerEur } from './services/exchangeRate'
 import { estimateToll, type TollEstimate } from './services/tollEstimate'
 import { adjustForeignTolls, defaultForeignTollRates } from './services/tollDiscounts'
@@ -18,7 +19,7 @@ import {
   loadTollRatesForUser,
   saveTollRatesForUser,
 } from './services/tollRatesStorage'
-import { geocodeAddresses, dedupeNearbyLocations } from './services/geocode'
+import { geocodeAddresses, dedupeNearbyLocations, reverseGeocode } from './services/geocode'
 import { buildWaypointsFromCsv } from './services/movementReportImport'
 import {
   formatSyncSummary,
@@ -27,15 +28,27 @@ import {
   requestTollSync,
 } from './services/syncToll'
 import { BugReportButton } from './components/BugReportButton'
+import { AppTutorial } from './components/AppTutorial'
+import { AdRewardDialog } from './components/AdRewardDialog'
 import { fetchQuota, confirmPayPalCheckout, recordCalculationUsage } from './services/billing'
+import {
+  takeCheckoutPlan,
+  trackSubscriptionConversion,
+} from './services/googleAds'
 import { isFirebaseConfigured } from './services/firebase'
+import {
+  hasCompletedTutorial,
+  markTutorialCompleted,
+} from './services/tutorialStorage'
 import { useLocale } from './i18n/LocaleContext'
 import type { QuotaSnapshot } from './types/billing'
 import type {
   EmissionClass,
   ForeignTollRates,
   Location,
+  MapPickTarget,
   RouteResult,
+  StopSlot,
   VehicleMode,
 } from './types'
 import {
@@ -47,6 +60,9 @@ import {
   DEFAULT_OPERATING_COST_EUR_PER_KM,
   DEFAULT_VEHICLE_HEIGHT_CM,
   MAX_INTERMEDIATE_STOPS,
+  createStopSlot,
+  isSameMapPickTarget,
+  mapPickShortLabel,
 } from './types'
 import naplatneStaniceMeta from './data/naplatne-stanice.json'
 import cenovnikMeta from './data/cenovnik-putarine.json'
@@ -58,7 +74,7 @@ export default function App() {
   const [screen, setScreen] = useState<'app' | 'pricing'>('app')
   const [origin, setOrigin] = useState<Location | null>(null)
   const [destination, setDestination] = useState<Location | null>(null)
-  const [stops, setStops] = useState<Array<Location | null>>([])
+  const [stops, setStops] = useState<StopSlot[]>([])
   const [vehicleMode, setVehicleMode] = useState<VehicleMode>('car')
   const [consumption, setConsumption] = useState(
     DEFAULT_CONSUMPTION_L_PER_100KM.car,
@@ -95,6 +111,25 @@ export default function App() {
   )
   const [quota, setQuota] = useState<QuotaSnapshot | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [adRewardOpen, setAdRewardOpen] = useState(false)
+  const [tutorialOpen, setTutorialOpen] = useState(false)
+  const [loginOpen, setLoginOpen] = useState(false)
+  const [mapPickTarget, setMapPickTarget] = useState<MapPickTarget | null>(null)
+  const [mapGeocoding, setMapGeocoding] = useState(false)
+  const tutorialAutoStarted = useRef(false)
+
+  async function handleLoginSuccess(): Promise<void> {
+    setAuthed(true)
+    setLoginOpen(false)
+    await refreshTollRatesFromAccount()
+    await refreshQuota()
+  }
+
+  function requireAuth(): boolean {
+    if (authed) return true
+    setLoginOpen(true)
+    return false
+  }
 
   async function refreshQuota(): Promise<void> {
     if (!isFirebaseConfigured() || !isAuthenticated()) return
@@ -117,16 +152,35 @@ export default function App() {
         'paypalCheckout',
         subscriptionId ? `sub:${subscriptionId}` : 'success',
       )
+      // Keep ?checkout=success long enough for URL-based Ads conversion + gtag.
+      const planFromUrl = params.get('plan')
+      if (planFromUrl) {
+        try {
+          sessionStorage.setItem('googleAdsPendingPlanId', planFromUrl)
+        } catch {
+          // ignore
+        }
+      }
     } else if (checkout === 'cancel') {
       setNotice(t('checkoutCancel'))
     }
 
-    params.delete('checkout')
-    params.delete('subscription_id')
-    params.delete('ba_token')
-    params.delete('token')
-    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}`
-    window.history.replaceState({}, '', next)
+    const clearParams = () => {
+      params.delete('checkout')
+      params.delete('subscription_id')
+      params.delete('ba_token')
+      params.delete('token')
+      params.delete('plan')
+      const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}`
+      window.history.replaceState({}, '', next)
+    }
+
+    // Delay stripping success URL so Ads page-load / Tag Assistant can see it.
+    if (checkout === 'success') {
+      window.setTimeout(clearParams, 5000)
+    } else {
+      clearParams()
+    }
   }, [t])
 
   useEffect(() => {
@@ -153,6 +207,11 @@ export default function App() {
         if (cancelled) return
         if (next.plan === 'subscribed') {
           setQuota(next)
+          const planId = takeCheckoutPlan(next.planId ?? next.queuedPlanId)
+          trackSubscriptionConversion({
+            planId,
+            transactionId: subscriptionId || next.planId || 'paypal-success',
+          })
           if (next.queuedPlanId) {
             setNotice(t('checkoutQueuedSuccess'))
           } else if (pending) {
@@ -192,12 +251,25 @@ export default function App() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!authReady || !authed || screen !== 'app') return
+    if (tutorialAutoStarted.current) return
+    const accountId = getAccountId()
+    if (!accountId) return
+    tutorialAutoStarted.current = true
+    if (!hasCompletedTutorial(accountId)) {
+      setTutorialOpen(true)
+    }
+  }, [authReady, authed, screen])
+
   async function refreshTollRatesFromAccount(): Promise<void> {
     const rates = await loadTollRatesForUser()
     setTollRates(rates)
   }
 
-  const resolvedStops = stops.filter((stop): stop is Location => stop !== null)
+  const resolvedStops = stops
+    .map((stop) => stop.location)
+    .filter((stop): stop is Location => stop !== null)
 
   function clearRouteResults() {
     setRoute(null)
@@ -205,9 +277,53 @@ export default function App() {
     setExchangeRateLabel(null)
   }
 
+  function handleMapPickRequest(target: MapPickTarget) {
+    if (!requireAuth()) return
+    setMapPickTarget((prev) =>
+      prev && isSameMapPickTarget(prev, target) ? null : target,
+    )
+  }
+
+  async function handleMapPick(lat: number, lng: number) {
+    if (!mapPickTarget || !authed) return
+    const target = mapPickTarget
+    setMapGeocoding(true)
+    setError(null)
+    try {
+      const location = await reverseGeocode(lat, lng)
+      if (target.kind === 'origin') {
+        setOrigin(location)
+      } else if (target.kind === 'destination') {
+        setDestination(location)
+      } else {
+        setStops((prev) =>
+          prev.map((item, i) =>
+            i === target.index ? { ...item, location } : item,
+          ),
+        )
+      }
+      clearRouteResults()
+      setMapPickTarget(null)
+    } catch {
+      setError(t('mapPickFailed'))
+    } finally {
+      setMapGeocoding(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!mapPickTarget) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMapPickTarget(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [mapPickTarget])
+
   async function handleSubmit() {
     if (!origin || !destination) return
-    if (stops.some((stop) => stop === null)) return
+    if (stops.some((stop) => stop.location === null)) return
+    if (!requireAuth()) return
 
     await calculateRoute(origin, destination, resolvedStops)
   }
@@ -221,21 +337,27 @@ export default function App() {
     setLoading(true)
     setError(null)
 
-    const routeOrigin = from
-    const routeDestination = roundTrip ? from : to
-    const routeVias = roundTrip ? [...via, to] : via
+    const routeOptions = {
+      emissionClass,
+      axleCount,
+      heightCm: vehicleHeight,
+    }
 
     try {
       if (quota && !quota.canCalculate) {
+        if (quota.canClaimAdReward) {
+          setAdRewardOpen(true)
+        }
         throw new Error(t('quotaExhausted'))
       }
 
       const [result, rate] = await Promise.all([
-        fetchRoute(routeOrigin, routeDestination, routeVias, vehicleMode, {
-          emissionClass,
-          axleCount,
-          heightCm: vehicleHeight,
-        }),
+        roundTrip
+          ? Promise.all([
+              fetchRoute(from, to, via, vehicleMode, routeOptions),
+              fetchRoute(to, from, [], vehicleMode, routeOptions),
+            ]).then(([outbound, inbound]) => mergeRouteResults(outbound, inbound))
+          : fetchRoute(from, to, via, vehicleMode, routeOptions),
         fetchNbsMiddleRsdPerEur(),
       ])
       const tollEstimate = estimateToll(
@@ -271,6 +393,8 @@ export default function App() {
   }
 
   async function handleImportCsv(file: File): Promise<void> {
+    if (!requireAuth()) return
+
     setImporting(true)
     setError(null)
     clearRouteResults()
@@ -296,7 +420,7 @@ export default function App() {
 
       setOrigin(nextOrigin)
       setDestination(nextDestination)
-      setStops(nextStops)
+      setStops(nextStops.map((location) => createStopSlot(location)))
       await calculateRoute(nextOrigin, nextDestination, nextStops)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('csvImportFailed'))
@@ -332,7 +456,6 @@ export default function App() {
   const operatingCost = distanceKm * operatingCostPerKm
   const serbiaTollEur = toll?.totalEur ?? 0
   const foreignTolls = route?.foreignTolls ?? null
-  const hasForeignTolls = (foreignTolls?.fares.length ?? 0) > 0
   const isTruck = vehicleMode !== 'car'
   const adjustedForeign = foreignTolls
     ? adjustForeignTolls(foreignTolls, { isTruck, rates: tollRates })
@@ -348,11 +471,20 @@ export default function App() {
   if (!localeReady || !authReady) {
     return (
       <div className="login-screen">
-        <div className="login-card">
+        <div className="login-atmosphere" aria-hidden="true" />
+        <main className="login-hero login-hero-loading">
+          <img
+            className="login-logo login-logo-compact"
+            src="/logo.png"
+            alt={t('brand')}
+            width={181}
+            height={173}
+            decoding="async"
+          />
           <h1 className="login-brand">{t('brand')}</h1>
           <p className="login-tagline">{t('brandTagline')}</p>
           <p className="login-sub">{t('loadingSession')}</p>
-        </div>
+        </main>
       </div>
     )
   }
@@ -365,23 +497,13 @@ export default function App() {
           showLoginHint={!authed}
           isAuthenticated={authed}
           quota={quota}
-          onRequireLogin={() => setScreen('app')}
+          onRequireLogin={() => {
+            setScreen('app')
+            setLoginOpen(true)
+          }}
           onQuotaChange={setQuota}
         />
       </div>
-    )
-  }
-
-  if (!authed) {
-    return (
-      <LoginScreen
-        onSuccess={() => {
-          setAuthed(true)
-          void refreshTollRatesFromAccount()
-          void refreshQuota()
-        }}
-        onOpenPricing={() => setScreen('pricing')}
-      />
     )
   }
 
@@ -389,58 +511,150 @@ export default function App() {
     <div className="app">
       <header className="app-header">
         <div className="app-header-row">
-          <div>
-            <h1>{t('appTitle')}</h1>
-            <p>{t('appSubtitle')}</p>
+          <div className="app-brand" data-tour="welcome">
+            <img
+              className="app-logo"
+              src="/logo.png"
+              alt={t('brand')}
+              width={181}
+              height={173}
+              decoding="async"
+            />
+            <div>
+              <h1>{t('appTitle')}</h1>
+              <p>{t('appSubtitle')}</p>
+            </div>
           </div>
           <div className="app-header-actions">
             <LanguageToggle />
+            <button
+              type="button"
+              className="btn btn-logout btn-tutorial-help"
+              data-tour="help"
+              title={t('tutorialHelpTitleAttr')}
+              aria-label={t('tutorialHelpTitleAttr')}
+              onClick={() => setTutorialOpen(true)}
+            >
+              {t('tutorialHelp')}
+            </button>
             <BugReportButton className="btn btn-logout" title={t('bugReportTitle')} />
             <button
               type="button"
               className="btn btn-logout"
+              data-tour="pricing"
               onClick={() => setScreen('pricing')}
             >
               {t('pricingNav')}
             </button>
-            <button
-              type="button"
-              className="btn btn-logout"
-              onClick={() => {
-                void (async () => {
-                  await logout()
-                  setAuthed(false)
-                  setQuota(null)
-                  setScreen('app')
-                  setTollRates(defaultForeignTollRates())
-                })()
-              }}
-            >
-              {t('logout')}
-            </button>
+            <a href="/privacy" className="btn btn-logout">
+              {t('privacyNav')}
+            </a>
+            {authed ? (
+              <button
+                type="button"
+                className="btn btn-logout"
+                onClick={() => {
+                  void (async () => {
+                    await logout()
+                    setAuthed(false)
+                    setQuota(null)
+                    setScreen('app')
+                    setTollRates(defaultForeignTollRates())
+                    setTutorialOpen(false)
+                    setLoginOpen(false)
+                    tutorialAutoStarted.current = false
+                    clearRouteResults()
+                  })()
+                }}
+              >
+                {t('logout')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-logout"
+                onClick={() => setLoginOpen(true)}
+              >
+                {t('loginGoogle')}
+              </button>
+            )}
           </div>
         </div>
         {quota ? (
-          <p className="app-quota">
-            {t('quotaLabel', {
-              remaining: quota.remaining,
-              limit: quota.limit,
-            })}
-            {quota.plan === 'subscribed' && quota.periodEnd
-              ? ` · ${t('quotaUntil', {
-                  date: new Date(quota.periodEnd).toLocaleDateString(
-                    numberLocale,
-                    { dateStyle: 'medium' },
-                  ),
-                })}`
-              : ''}
-            {quota.cancelAtPeriodEnd
-              ? ` · ${t('subscriptionCancelledPending')}`
-              : ''}
-          </p>
-        ) : null}
+          <div className="app-quota" data-tour="quota" aria-live="polite">
+            <div className="app-quota-main">
+              <span className="app-quota-heading">{t('quotaHeading')}</span>
+              <span className="app-quota-nums">
+                {(
+                  quota.remaining + (quota.bonusCalculations ?? 0)
+                ).toLocaleString(numberLocale)}
+                {' / '}
+                {quota.limit.toLocaleString(numberLocale)}
+              </span>
+            </div>
+            <div className="app-quota-extra">
+              <span
+                className={`app-quota-chip${(quota.bonusCalculations ?? 0) > 0 ? '' : ' is-muted'}`}
+              >
+                {(quota.bonusCalculations ?? 0) > 0
+                  ? t('quotaBonus', { bonus: quota.bonusCalculations })
+                  : t('quotaBonus', { bonus: 0 })}
+              </span>
+              <span
+                className={`app-quota-chip${quota.plan === 'subscribed' && quota.periodEnd ? '' : ' is-muted'}`}
+              >
+                {quota.plan === 'subscribed' && quota.periodEnd
+                  ? t('quotaUntil', {
+                      date: new Date(quota.periodEnd).toLocaleDateString(
+                        numberLocale,
+                        { dateStyle: 'medium' },
+                      ),
+                    })
+                  : t('quotaNoPeriod')}
+              </span>
+              <span
+                className={`app-quota-chip${quota.cancelAtPeriodEnd ? ' is-warn' : ' is-muted'}`}
+              >
+                {quota.cancelAtPeriodEnd
+                  ? t('quotaCancelChip')
+                  : '—'}
+              </span>
+              {quota.canClaimAdReward ? (
+                <button
+                  type="button"
+                  className="app-quota-chip app-quota-chip-action"
+                  onClick={() => setAdRewardOpen(true)}
+                >
+                  {t('adRewardCta')}
+                </button>
+              ) : (
+                <span className="app-quota-chip is-muted app-quota-chip-spacer" aria-hidden>
+                  —
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="app-quota app-quota-skeleton" data-tour="quota" aria-hidden>
+            <div className="app-quota-main">
+              <span className="app-quota-heading">{t('quotaHeading')}</span>
+              <span className="app-quota-nums">— / —</span>
+            </div>
+            <div className="app-quota-extra">
+              <span className="app-quota-chip is-muted">—</span>
+              <span className="app-quota-chip is-muted">—</span>
+              <span className="app-quota-chip is-muted">—</span>
+              <span className="app-quota-chip is-muted app-quota-chip-spacer">—</span>
+            </div>
+          </div>
+        )}
         {notice ? <p className="app-notice">{notice}</p> : null}
-        <p className="app-disclaimer">{t('disclaimer')}</p>
+        <p className="app-disclaimer">
+          {t('disclaimer')}{' '}
+          <a href="/privacy" className="link-btn">
+            {t('privacyLink')}
+          </a>
+        </p>
       </header>
 
       <main className="app-main">
@@ -473,17 +687,55 @@ export default function App() {
               clearRouteResults()
             }}
             onStopChange={(index, location) => {
-              setStops((prev) => prev.map((item, i) => (i === index ? location : item)))
+              setStops((prev) =>
+                prev.map((item, i) =>
+                  i === index ? { ...item, location } : item,
+                ),
+              )
               clearRouteResults()
             }}
             onAddStop={() => {
               setStops((prev) =>
-                prev.length >= MAX_INTERMEDIATE_STOPS ? prev : [...prev, null],
+                prev.length >= MAX_INTERMEDIATE_STOPS
+                  ? prev
+                  : [...prev, createStopSlot(null)],
               )
               clearRouteResults()
             }}
             onRemoveStop={(index) => {
               setStops((prev) => prev.filter((_, i) => i !== index))
+              setMapPickTarget((prev) => {
+                if (!prev || prev.kind !== 'stop') return prev
+                if (prev.index === index) return null
+                if (prev.index > index) {
+                  return { kind: 'stop', index: prev.index - 1 }
+                }
+                return prev
+              })
+              clearRouteResults()
+            }}
+            onReorderStops={(fromIndex, toIndex) => {
+              setStops((prev) => {
+                if (
+                  fromIndex < 0 ||
+                  toIndex < 0 ||
+                  fromIndex >= prev.length ||
+                  toIndex >= prev.length ||
+                  fromIndex === toIndex
+                ) {
+                  return prev
+                }
+                const next = [...prev]
+                const [moved] = next.splice(fromIndex, 1)
+                next.splice(toIndex, 0, moved)
+                return next
+              })
+              clearRouteResults()
+            }}
+            onSwapOriginDestination={() => {
+              setOrigin(destination)
+              setDestination(origin)
+              setStops((prev) => [...prev].reverse())
               clearRouteResults()
             }}
             onVehicleModeChange={(mode) => {
@@ -530,6 +782,11 @@ export default function App() {
             onSubmit={() => {
               void handleSubmit()
             }}
+            routeInputsLocked={!authed}
+            onRequireAuth={() => setLoginOpen(true)}
+            mapPickTarget={mapPickTarget}
+            onMapPickRequest={handleMapPickRequest}
+            mapPickingBusy={mapGeocoding}
           />
 
           {error ? (
@@ -544,20 +801,33 @@ export default function App() {
           {importing ? (
             <div className="status status-loading">{t('importingStatus')}</div>
           ) : null}
+          {mapGeocoding ? (
+            <div className="status status-loading">{t('mapGeocoding')}</div>
+          ) : null}
         </aside>
 
-        <section className="map-panel">
-          <div className="map-caption">{t('mapCaption')}</div>
+        <section
+          className={`map-panel${mapPickTarget ? ' map-panel-picking' : ''}`}
+          data-tour="map"
+        >
+          <div className="map-caption">
+            {mapPickTarget
+              ? t('mapPickHint', { label: mapPickShortLabel(mapPickTarget) })
+              : t('mapCaption')}
+          </div>
           <RouteMap
             origin={origin}
             destination={destination}
             stops={resolvedStops}
             routeCoordinates={route?.coordinates ?? []}
-            tollStations={toll?.detectedStations ?? []}
+            mapPickTarget={mapPickTarget}
+            onMapPick={(lat, lng) => {
+              void handleMapPick(lat, lng)
+            }}
           />
         </section>
 
-        <aside className="results-sidebar">
+        <aside className="results-sidebar" data-tour="results">
           {route && toll && grandTotal !== null ? (
             <ResultPanel
               grandTotal={grandTotal}
@@ -567,6 +837,7 @@ export default function App() {
               liters={liters}
               fuelPrice={fuelPrice}
               fuelCost={fuelCost}
+              consumption={consumption}
               serbiaTollEur={serbiaTollEur}
               foreignTollEur={foreignTollEur}
               foreignDiscount={foreignDiscount}
@@ -574,12 +845,11 @@ export default function App() {
               driverFee={driverFee}
               operatingCostPerKm={operatingCostPerKm}
               operatingCost={operatingCost}
-              isTruck={isTruck}
-              hasForeignTolls={hasForeignTolls}
               toll={toll}
               adjustedForeign={adjustedForeign}
               foreignTolls={foreignTolls}
               routeLegs={route.legs}
+              distanceByCountry={route.distanceByCountry ?? {}}
               exchangeRateLabel={exchangeRateLabel}
             />
           ) : (
@@ -590,6 +860,45 @@ export default function App() {
           )}
         </aside>
       </main>
+
+      <AdRewardDialog
+        open={adRewardOpen}
+        adRewardsRemaining={quota?.adRewardsRemaining ?? 0}
+        onClose={() => setAdRewardOpen(false)}
+        onClaimed={(next) => {
+          setQuota(next)
+          setNotice(t('adRewardReady'))
+        }}
+        onOpenPricing={() => {
+          setAdRewardOpen(false)
+          setScreen('pricing')
+        }}
+      />
+
+      <AppTutorial
+        open={tutorialOpen}
+        onClose={(completed) => {
+          setTutorialOpen(false)
+          const accountId = getAccountId()
+          if (accountId && (completed || !hasCompletedTutorial(accountId))) {
+            markTutorialCompleted(accountId)
+          }
+        }}
+      />
+
+      {!authed && loginOpen ? (
+        <div className="login-overlay">
+          <LoginScreen
+            onSuccess={() => {
+              void handleLoginSuccess()
+            }}
+            onOpenPricing={() => {
+              setLoginOpen(false)
+              setScreen('pricing')
+            }}
+          />
+        </div>
+      ) : null}
 
       {import.meta.env.DEV ? (
         <div className="sync-corner">

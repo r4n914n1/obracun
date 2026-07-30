@@ -1,19 +1,25 @@
 import naplatneStanice from '../data/naplatne-stanice.json'
 import bypassPetlje from '../data/bypass-petlje.json'
+import bypassCorridorData from '../data/bypass-corridor.json'
 import { distanceToPolylineMeters, haversineMeters } from './geo'
 
 /** How close the route must stay to the paid motorway corridor (m) */
-export const TOLL_CORRIDOR_BUFFER_M = 4500
+export const TOLL_CORRIDOR_BUFFER_M = 1000
 /**
  * Brief "off corridor" below this along-route length is treated as noise
  * (missing stations / curved A1 vs straight station polyline), not a real exit.
+ * Highway: large — NS spacing / corridor approximation creates false holes.
+ * Bypass: small — Avala→Beograd style shortcuts are real exits (~10–25 km).
  */
-const MIN_OFF_GAP_M = 22_000
+const MIN_OFF_GAP_HIGHWAY_M = 22_000
+const MIN_OFF_GAP_BYPASS_M = 2_500
 const MIN_ON_STRETCH_M = 2500
 /** Sample spacing along the driver route */
 const SAMPLE_STEP_M = 400
 /** After interval split, merge sessions if station gap along route is below this */
 export const SESSION_MERGE_GAP_M = 30_000
+/** Bypass petlje are close; never glue re-entry tickets across a real exit. */
+export const BYPASS_SESSION_MERGE_GAP_M = 2_000
 
 export interface TollInterval {
   /** Distance along driver route where paid stretch starts */
@@ -109,6 +115,12 @@ function buildHighwayCorridors(): [number, number][][] {
 }
 
 function buildBypassCorridor(): [number, number][] {
+  const fromFile = (bypassCorridorData.coordinates ?? []) as [number, number][]
+  if (fromFile.length >= 2) {
+    return fromFile.map((p) => [p[0], p[1]])
+  }
+
+  // Fallback: petlja chain (less accurate — chords, not motorway centerline)
   const points: [number, number][] = []
   for (const petlja of bypassPetlje) {
     points.push([petlja.lat, petlja.lng])
@@ -116,7 +128,6 @@ function buildBypassCorridor(): [number, number][] {
       points.push([anchor[0], anchor[1]])
     }
   }
-  // chain around Belgrade ring (west → south → east order approx by angle from center)
   const center: [number, number] = [44.78, 20.35]
   const unique: [number, number][] = []
   for (const p of points) {
@@ -200,6 +211,7 @@ function sampleRoute(
 
 function intervalsFromFlags(
   samples: Array<{ along: number; on: boolean }>,
+  minOffGapM: number,
 ): TollInterval[] {
   const raw: TollInterval[] = []
   let start: number | null = null
@@ -222,7 +234,7 @@ function intervalsFromFlags(
   const merged: TollInterval[] = []
   for (const interval of raw) {
     const prev = merged[merged.length - 1]
-    if (prev && interval.startAlong - prev.endAlong < MIN_OFF_GAP_M) {
+    if (prev && interval.startAlong - prev.endAlong < minOffGapM) {
       prev.endAlong = interval.endAlong
     } else {
       merged.push({ ...interval })
@@ -244,19 +256,19 @@ export function findHighwayTollIntervals(
     along: s.along,
     on: distanceToCorridors(s.point, HIGHWAY_CORRIDORS) <= bufferMeters,
   }))
-  return intervalsFromFlags(samples)
+  return intervalsFromFlags(samples, MIN_OFF_GAP_HIGHWAY_M)
 }
 
 export function findBypassTollIntervals(
   route: [number, number][],
-  bufferMeters: number = 5000,
+  bufferMeters: number = 500,
 ): TollInterval[] {
   const corridors = [BYPASS_CORRIDOR]
   const samples = sampleRoute(route, SAMPLE_STEP_M).map((s) => ({
     along: s.along,
     on: distanceToCorridors(s.point, corridors) <= bufferMeters,
   }))
-  return intervalsFromFlags(samples)
+  return intervalsFromFlags(samples, MIN_OFF_GAP_BYPASS_M)
 }
 
 /** Assign detected station passages into corridor ON intervals */

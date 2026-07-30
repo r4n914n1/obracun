@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const envPath = path.join(root, 'functions', '.env')
+const secretsPath = path.join(root, 'functions', '.env.secrets')
 
 function loadEnvFile(file) {
   if (!fs.existsSync(file)) {
@@ -27,7 +28,10 @@ function loadEnvFile(file) {
 }
 
 function secretValues() {
-  const fileEnv = loadEnvFile(envPath)
+  const fileEnv = {
+    ...loadEnvFile(envPath),
+    ...(fs.existsSync(secretsPath) ? loadEnvFile(secretsPath) : {}),
+  }
   const pick = (key) => (process.env[key] ?? fileEnv[key] ?? '').trim()
   return {
     PAYPAL_CLIENT_ID: pick('PAYPAL_CLIENT_ID'),
@@ -74,9 +78,13 @@ async function setSecret(name, value) {
   await runFirebaseSecretSet(name, value)
 }
 
-async function verifyPayPalAuth(clientId, clientSecret) {
+async function verifyPayPalAuth(clientId, clientSecret, mode) {
+  const base =
+    mode === 'live'
+      ? 'https://api-m.paypal.com'
+      : 'https://api-m.sandbox.paypal.com'
   const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
-  const response = await fetch('https://api-m.sandbox.paypal.com/v1/oauth2/token', {
+  const response = await fetch(`${base}/v1/oauth2/token`, {
     method: 'POST',
     headers: {
       Authorization: `Basic ${auth}`,
@@ -86,11 +94,15 @@ async function verifyPayPalAuth(clientId, clientSecret) {
   })
   if (!response.ok) {
     const body = await response.text()
-    throw new Error(`PayPal sandbox auth ne prolazi: ${response.status} ${body}`)
+    throw new Error(`PayPal ${mode} auth ne prolazi: ${response.status} ${body}`)
   }
 }
 
 async function main() {
+  const fileEnv = loadEnvFile(envPath)
+  const mode = (process.env.PAYPAL_MODE ?? fileEnv.PAYPAL_MODE ?? 'sandbox')
+    .trim()
+    .toLowerCase()
   const secrets = secretValues()
   const required = [
     'PAYPAL_CLIENT_ID',
@@ -105,19 +117,41 @@ async function main() {
     }
   }
 
-  await verifyPayPalAuth(secrets.PAYPAL_CLIENT_ID, secrets.PAYPAL_CLIENT_SECRET)
+  console.log(`Proveravam PayPal ${mode} auth...`)
+  await verifyPayPalAuth(
+    secrets.PAYPAL_CLIENT_ID,
+    secrets.PAYPAL_CLIENT_SECRET,
+    mode,
+  )
 
   await setSecret('PAYPAL_CLIENT_ID', secrets.PAYPAL_CLIENT_ID)
   await setSecret('PAYPAL_CLIENT_SECRET', secrets.PAYPAL_CLIENT_SECRET)
   await setSecret('PAYPAL_WEBHOOK_ID', secrets.PAYPAL_WEBHOOK_ID)
 
-  // Firebase učitava functions/.env pri deploy-u za defineString params
+  // Firebase učitava functions/.env + .env.<project> — bez secret key-eva
+  // (inače konflikt sa defineSecret).
   const projectEnv = path.join(root, 'functions', '.env.transportcost')
-  fs.copyFileSync(envPath, projectEnv)
-  console.log(`Kopirano u ${projectEnv}`)
+  const paramLines = [
+    '# Generated for Firebase params — no PAYPAL_CLIENT_* / WEBHOOK secrets',
+    `PAYPAL_MODE=${fileEnv.PAYPAL_MODE ?? mode}`,
+    `APP_URL=${fileEnv.APP_URL ?? 'https://transportcost.info/'}`,
+  ]
+  for (const key of [
+    'PAYPAL_PLAN_LITE_1M',
+    'PAYPAL_PLAN_STARTER_1M',
+    'PAYPAL_PLAN_STANDARD_1M',
+    'PAYPAL_PLAN_PRO_1M',
+    'PAYPAL_PLAN_STARTER_3M',
+    'PAYPAL_PLAN_STANDARD_3M',
+    'PAYPAL_PLAN_PRO_3M',
+  ]) {
+    if (fileEnv[key]) paramLines.push(`${key}=${fileEnv[key]}`)
+  }
+  fs.writeFileSync(projectEnv, `${paramLines.join('\n')}\n`, 'utf8')
+  console.log(`Kopirano (bez secreta) u ${projectEnv}`)
 
   console.log('\nGotovo. Deploy:')
-  console.log('  firebase deploy --only functions,hosting')
+  console.log('  firebase deploy --only functions')
 }
 
 main().catch((err) => {

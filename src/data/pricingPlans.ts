@@ -9,10 +9,17 @@ export interface PricingPlan {
   featured?: boolean
 }
 
-export const TRIAL_CALCULATIONS = 10
+export const TRIAL_CALCULATIONS = 5
 
 /** Mesečni paketi */
 export const MONTHLY_PLANS: PricingPlan[] = [
+  {
+    id: 'lite-1m',
+    name: 'Lite',
+    priceEur: 1,
+    period: 'month',
+    monthlyLimit: 100,
+  },
   {
     id: 'starter-1m',
     name: 'Starter',

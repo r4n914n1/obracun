@@ -8,7 +8,12 @@ import type {
   VehicleMode,
   VehicleTollOptions,
 } from '../types'
-import { haversineMeters } from './geo'
+import {
+  distanceAlongPolyline,
+  haversineMeters,
+  pointAlongPolyline,
+  polylineLengthMeters,
+} from './geo'
 import {
   classifyForeignTollKind,
   foreignTollDisplayName,
@@ -34,6 +39,12 @@ interface HereToll {
   fares?: HereFare[]
 }
 
+interface HereSpan {
+  offset?: number
+  countryCode?: string
+  length?: number
+}
+
 interface HereSection {
   polyline: string
   summary?: {
@@ -41,6 +52,13 @@ interface HereSection {
     duration?: number
   }
   tolls?: HereToll[]
+  spans?: HereSpan[]
+}
+
+interface CountryRange {
+  country: string
+  startMeters: number
+  endMeters: number
 }
 
 /** Serbia is priced by our own engine; HERE tolls are used only elsewhere. */
@@ -102,46 +120,246 @@ function sectionLegLabel(
     return `${leg.fromLabel} → ${leg.toLabel}`
   }
 
-  const coords = decodeSectionCoordinates(section)
-  if (coords.length === 0) return null
+  // Prefer distance along the full itinerary so outbound vs return on the same
+  // corridor (e.g. Beograd ↔ Solun) do not snap to the wrong pass.
+  const ranges: Array<{ label: string; start: number; end: number }> = []
+  const full: [number, number][] = []
+  let offset = 0
+  for (const leg of legs) {
+    const len = polylineLengthMeters(leg.coordinates)
+    ranges.push({
+      label: `${leg.fromLabel} → ${leg.toLabel}`,
+      start: offset,
+      end: offset + len,
+    })
+    if (full.length === 0) full.push(...leg.coordinates)
+    else full.push(...leg.coordinates.slice(1))
+    offset += len
+  }
 
-  const mid = coords[Math.floor(coords.length / 2)]
-  let bestLeg = 0
-  let bestDist = Infinity
-  for (let i = 0; i < legs.length; i++) {
-    for (const point of legs[i].coordinates) {
-      const dist = haversineMeters(mid, point)
-      if (dist < bestDist) {
-        bestDist = dist
-        bestLeg = i
-      }
+  if (ranges.length === 0) return null
+
+  const coords = decodeSectionCoordinates(section)
+  const anchor =
+    coords[0] ??
+    (coords.length > 0 ? coords[Math.floor(coords.length / 2)] : null)
+
+  let progress: number
+  if (anchor && full.length >= 2) {
+    progress = distanceAlongPolyline(full, anchor)
+  } else {
+    const frac = (sectionIndex + 0.5) / Math.max(1, sections.length)
+    progress = frac * offset
+  }
+
+  for (const range of ranges) {
+    if (progress >= range.start - 1 && progress <= range.end + 1) {
+      return range.label
     }
   }
 
-  const leg = legs[bestLeg]
-  return `${leg.fromLabel} → ${leg.toLabel}`
+  let best = ranges[0]
+  let bestDist = Infinity
+  for (const range of ranges) {
+    const mid = (range.start + range.end) / 2
+    const dist = Math.abs(progress - mid)
+    if (dist < bestDist) {
+      bestDist = dist
+      best = range
+    }
+  }
+  return best.label
 }
 
-/** Collect non-Serbian tolls across all sections, deduped by fare id (pay once). */
+/** Cumulative meters from coord[0] to coord[index] along the polyline. */
+function metersToIndex(coordinates: [number, number][], index: number): number {
+  const end = Math.max(0, Math.min(index, coordinates.length - 1))
+  let along = 0
+  for (let i = 1; i <= end; i++) {
+    along += haversineMeters(coordinates[i - 1], coordinates[i])
+  }
+  return along
+}
+
+/**
+ * Build ordered country ranges and totals from HERE countryCode spans.
+ * Ranges are absolute meters along the concatenated route polyline.
+ */
+function buildCountryMetrics(sections: HereSection[]): {
+  distanceByCountry: Record<string, number>
+  ranges: CountryRange[]
+  fullCoordinates: [number, number][]
+} {
+  const distanceByCountry: Record<string, number> = {}
+  const ranges: CountryRange[] = []
+  const fullCoordinates: [number, number][] = []
+  let routeOffset = 0
+
+  for (const section of sections) {
+    const coords = decodeSectionCoordinates(section)
+    if (coords.length < 2) continue
+
+    const sectionLen =
+      section.summary?.length ??
+      polylineLengthMeters(coords)
+
+    const spans = [...(section.spans ?? [])].sort(
+      (a, b) => (a.offset ?? 0) - (b.offset ?? 0),
+    )
+
+    if (spans.length === 0) {
+      // No country data — treat whole section as unknown.
+      appendCoordinates(fullCoordinates, coords)
+      routeOffset += sectionLen
+      continue
+    }
+
+    for (let i = 0; i < spans.length; i++) {
+      const span = spans[i]
+      const country = (span.countryCode ?? '').trim().toUpperCase()
+      if (!country) continue
+
+      const startIdx = Math.max(0, Math.min(span.offset ?? 0, coords.length - 1))
+      const endIdx =
+        i + 1 < spans.length
+          ? Math.max(
+              startIdx,
+              Math.min(spans[i + 1].offset ?? coords.length - 1, coords.length - 1),
+            )
+          : coords.length - 1
+
+      let spanLen =
+        typeof span.length === 'number' && span.length > 0
+          ? span.length
+          : metersToIndex(coords, endIdx) - metersToIndex(coords, startIdx)
+      if (spanLen < 0) spanLen = 0
+
+      const polyLen = polylineLengthMeters(coords)
+      const rawSum = spans.reduce((sum, s, si) => {
+        const a = Math.max(0, Math.min(s.offset ?? 0, coords.length - 1))
+        const b =
+          si + 1 < spans.length
+            ? Math.max(
+                a,
+                Math.min(spans[si + 1].offset ?? coords.length - 1, coords.length - 1),
+              )
+            : coords.length - 1
+        const raw =
+          typeof s.length === 'number' && s.length > 0
+            ? s.length
+            : metersToIndex(coords, b) - metersToIndex(coords, a)
+        return sum + Math.max(0, raw)
+      }, 0)
+      if (rawSum > 0 && sectionLen > 0) {
+        spanLen = (spanLen / rawSum) * sectionLen
+      }
+
+      const startRatio =
+        polyLen > 0 ? metersToIndex(coords, startIdx) / polyLen : 0
+      const absStart = routeOffset + startRatio * sectionLen
+      const absEnd = absStart + spanLen
+
+      ranges.push({
+        country,
+        startMeters: absStart,
+        endMeters: Math.max(absStart, absEnd),
+      })
+      distanceByCountry[country] =
+        (distanceByCountry[country] ?? 0) + spanLen
+    }
+
+    appendCoordinates(fullCoordinates, coords)
+    routeOffset += sectionLen
+  }
+
+  // Merge adjacent ranges of the same country.
+  const merged: CountryRange[] = []
+  for (const range of ranges) {
+    const prev = merged[merged.length - 1]
+    if (
+      prev &&
+      prev.country === range.country &&
+      Math.abs(prev.endMeters - range.startMeters) < 50
+    ) {
+      prev.endMeters = Math.max(prev.endMeters, range.endMeters)
+    } else {
+      merged.push({ ...range })
+    }
+  }
+
+  return { distanceByCountry, ranges: merged, fullCoordinates }
+}
+
+function positionInRanges(
+  ranges: CountryRange[],
+  index: number,
+  count: number,
+): number {
+  if (ranges.length === 0 || count <= 0) return 0
+  const total = ranges.reduce((s, r) => s + Math.max(0, r.endMeters - r.startMeters), 0)
+  if (total <= 0) return ranges[0].startMeters
+  const target = ((index + 0.5) / count) * total
+  let along = 0
+  for (const range of ranges) {
+    const len = Math.max(0, range.endMeters - range.startMeters)
+    if (along + len >= target || range === ranges[ranges.length - 1]) {
+      const t = len <= 0 ? 0 : Math.min(1, Math.max(0, (target - along) / len))
+      return range.startMeters + t * len
+    }
+    along += len
+  }
+  return ranges[ranges.length - 1].endMeters
+}
+
+/** Collect non-Serbian tolls across all sections (once per fare per route leg). */
 function summarizeForeignTolls(
   sections: HereSection[],
   legs: RouteLeg[],
+  countryRanges: CountryRange[],
+  fullCoordinates: [number, number][],
 ): ForeignTollSummary {
   const chosen = new Map<string, ForeignTollFare>()
   let hasUnconverted = false
+  let sequence = 0
+
+  // Leg absolute offsets along concatenated route.
+  const legRanges: Array<{ label: string; start: number; end: number }> = []
+  let legOffset = 0
+  for (const leg of legs) {
+    const len = polylineLengthMeters(leg.coordinates)
+    legRanges.push({
+      label: `${leg.fromLabel} → ${leg.toLabel}`,
+      start: legOffset,
+      end: legOffset + len,
+    })
+    legOffset += len
+  }
 
   for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex++) {
     const section = sections[sectionIndex]
     const routeLegLabel = sectionLegLabel(section, sectionIndex, sections, legs)
-    const midpoint = sectionMidpoint(section)
+    const sectionCoords = decodeSectionCoordinates(section)
+    const sectionTolls = section.tolls ?? []
 
-    for (const toll of section.tolls ?? []) {
+    const pending: Array<{
+      dedupeKey: string
+      country: string
+      systemName: string
+      fareName: string
+      kind: ForeignTollFare['kind']
+      eur: number
+      paymentMethod: string | null
+    }> = []
+
+    for (const toll of sectionTolls) {
       const country = toll.countryCode ?? ''
       if (!country || country === SERBIA_COUNTRY_CODE) continue
 
       const fare = pickFare(toll.fares ?? [])
       if (!fare || !fare.id) continue
-      if (chosen.has(fare.id)) continue
+
+      const dedupeKey = `${fare.id}::${routeLegLabel ?? `section:${sectionIndex}`}`
+      if (chosen.has(dedupeKey)) continue
 
       const eur = fareEur(fare)
       if (eur == null) {
@@ -156,17 +374,76 @@ function summarizeForeignTolls(
       const fareName = fare.name ?? systemName ?? country
       const kind = classifyForeignTollKind(fareName, systemName)
 
-      chosen.set(fare.id, {
+      pending.push({
+        dedupeKey,
         country,
-        system: systemName,
-        name: foreignTollDisplayName(fareName, systemName, kind),
+        systemName,
+        fareName,
+        kind,
         eur,
         paymentMethod,
-        kind,
-        routeLegLabel,
-        lat: midpoint?.[0] ?? null,
-        lng: midpoint?.[1] ?? null,
       })
+    }
+
+    // Group by country preserving HERE order for placement inside country ranges.
+    const byCountryOrder: string[] = []
+    const groups = new Map<string, typeof pending>()
+    for (const item of pending) {
+      if (!groups.has(item.country)) {
+        groups.set(item.country, [])
+        byCountryOrder.push(item.country)
+      }
+      groups.get(item.country)!.push(item)
+    }
+
+    const legMeta = routeLegLabel
+      ? legRanges.find((r) => r.label === routeLegLabel)
+      : undefined
+
+    for (const country of byCountryOrder) {
+      const group = groups.get(country) ?? []
+      const n = group.length
+      const matchingRanges = countryRanges.filter((r) => {
+        if (r.country !== country) return false
+        if (!legMeta) return true
+        // Overlap with this route leg (outbound vs return).
+        return r.endMeters > legMeta.start - 1 && r.startMeters < legMeta.end + 1
+      })
+
+      for (let i = 0; i < n; i++) {
+        const item = group[i]
+        let progressMeters: number
+        if (matchingRanges.length > 0) {
+          progressMeters = positionInRanges(matchingRanges, i, n)
+        } else {
+          const fraction = n === 1 ? 0.5 : (i + 0.5) / n
+          const sectionProgress =
+            (legMeta?.start ?? 0) +
+            fraction * Math.max(1, (legMeta?.end ?? 1) - (legMeta?.start ?? 0))
+          progressMeters = sectionProgress
+        }
+
+        const totalLen = Math.max(1, polylineLengthMeters(fullCoordinates))
+        const point =
+          pointAlongPolyline(fullCoordinates, progressMeters / totalLen) ??
+          pointAlongPolyline(sectionCoords, (i + 0.5) / Math.max(1, n)) ??
+          sectionMidpoint(section)
+
+        sequence += 1
+        chosen.set(item.dedupeKey, {
+          country: item.country,
+          system: item.systemName,
+          name: foreignTollDisplayName(item.fareName, item.systemName, item.kind),
+          eur: item.eur,
+          paymentMethod: item.paymentMethod,
+          kind: item.kind,
+          routeLegLabel,
+          lat: point?.[0] ?? null,
+          lng: point?.[1] ?? null,
+          sequence,
+          progressMeters,
+        })
+      }
     }
   }
 
@@ -366,6 +643,72 @@ function buildLegsFromSections(
   return legs
 }
 
+function mergeForeignTollSummaries(
+  outbound: ForeignTollSummary,
+  inbound: ForeignTollSummary,
+  outboundDistanceMeters: number,
+): ForeignTollSummary {
+  const fares = [
+    ...outbound.fares,
+    ...inbound.fares.map((fare) => ({
+      ...fare,
+      progressMeters:
+        fare.progressMeters != null
+          ? fare.progressMeters + outboundDistanceMeters
+          : fare.progressMeters,
+    })),
+  ].map((fare, index) => ({ ...fare, sequence: index + 1 }))
+
+  const byCountryMap = new Map<string, number>()
+  for (const fare of fares) {
+    byCountryMap.set(
+      fare.country,
+      (byCountryMap.get(fare.country) ?? 0) + fare.eur,
+    )
+  }
+
+  const byCountry = [...byCountryMap.entries()]
+    .map(([country, eur]) => ({ country, eur: Math.round(eur * 100) / 100 }))
+    .sort((a, b) => b.eur - a.eur)
+
+  const totalEur =
+    Math.round(fares.reduce((sum, fare) => sum + fare.eur, 0) * 100) / 100
+
+  return {
+    totalEur,
+    byCountry,
+    fares,
+    hasUnconverted: outbound.hasUnconverted || inbound.hasUnconverted,
+  }
+}
+
+/** Combine outbound (A → stops → B) and return (B → A) into one itinerary. */
+export function mergeRouteResults(
+  outbound: RouteResult,
+  inbound: RouteResult,
+): RouteResult {
+  const coordinates: [number, number][] = [...outbound.coordinates]
+  appendCoordinates(coordinates, inbound.coordinates)
+
+  const distanceByCountry = { ...outbound.distanceByCountry }
+  for (const [country, meters] of Object.entries(inbound.distanceByCountry)) {
+    distanceByCountry[country] = (distanceByCountry[country] ?? 0) + meters
+  }
+
+  return {
+    coordinates,
+    distanceMeters: outbound.distanceMeters + inbound.distanceMeters,
+    durationSeconds: outbound.durationSeconds + inbound.durationSeconds,
+    legs: [...outbound.legs, ...inbound.legs],
+    foreignTolls: mergeForeignTollSummaries(
+      outbound.foreignTolls,
+      inbound.foreignTolls,
+      outbound.distanceMeters,
+    ),
+    distanceByCountry,
+  }
+}
+
 export async function fetchRoute(
   origin: Location,
   destination: Location,
@@ -385,6 +728,7 @@ export async function fetchRoute(
     origin: formatCoord(origin),
     destination: formatCoord(destination),
     return: 'polyline,summary,tolls',
+    spans: 'countryCode',
     currency: 'EUR',
     apikey: apiKey,
   })
@@ -451,13 +795,23 @@ export async function fetchRoute(
     sectionLegs ??
     buildLegsFromWaypoints(coordinates, waypoints, sectionSummaries)
 
-  const foreignTolls = summarizeForeignTolls(sections, legs)
+  const countryMetrics = buildCountryMetrics(sections)
+
+  const foreignTolls = summarizeForeignTolls(
+    sections,
+    legs,
+    countryMetrics.ranges,
+    countryMetrics.fullCoordinates.length >= 2
+      ? countryMetrics.fullCoordinates
+      : coordinates,
+  )
 
   return {
     coordinates,
     distanceMeters,
     durationSeconds,
     foreignTolls,
+    distanceByCountry: countryMetrics.distanceByCountry,
     legs:
       legs.length > 0
         ? legs

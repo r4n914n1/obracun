@@ -5,6 +5,7 @@ export interface PlanDefinition {
 
 /** Must match src/data/pricingPlans.ts plan ids. */
 export const PLAN_DEFINITIONS: Record<string, PlanDefinition> = {
+  'lite-1m': { id: 'lite-1m', monthlyLimit: 100 },
   'starter-1m': { id: 'starter-1m', monthlyLimit: 500 },
   'standard-1m': { id: 'standard-1m', monthlyLimit: 1000 },
   'pro-1m': { id: 'pro-1m', monthlyLimit: 2500 },

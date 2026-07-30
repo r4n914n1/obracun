@@ -18,6 +18,7 @@ exports.paypalClientSecret = (0, params_1.defineSecret)('PAYPAL_CLIENT_SECRET');
 exports.paypalWebhookId = (0, params_1.defineSecret)('PAYPAL_WEBHOOK_ID');
 exports.paypalMode = (0, params_1.defineString)('PAYPAL_MODE', { default: 'sandbox' });
 exports.appUrl = (0, params_1.defineString)('APP_URL', { default: 'https://transportcost.info/' });
+const paypalPlanLite1m = (0, params_1.defineString)('PAYPAL_PLAN_LITE_1M');
 const paypalPlanStarter1m = (0, params_1.defineString)('PAYPAL_PLAN_STARTER_1M');
 const paypalPlanStandard1m = (0, params_1.defineString)('PAYPAL_PLAN_STANDARD_1M');
 const paypalPlanPro1m = (0, params_1.defineString)('PAYPAL_PLAN_PRO_1M');
@@ -25,6 +26,7 @@ const paypalPlanStarter3m = (0, params_1.defineString)('PAYPAL_PLAN_STARTER_3M')
 const paypalPlanStandard3m = (0, params_1.defineString)('PAYPAL_PLAN_STANDARD_3M');
 const paypalPlanPro3m = (0, params_1.defineString)('PAYPAL_PLAN_PRO_3M');
 const PAYPAL_PLAN_BY_APP = {
+    'lite-1m': paypalPlanLite1m,
     'starter-1m': paypalPlanStarter1m,
     'standard-1m': paypalPlanStandard1m,
     'pro-1m': paypalPlanPro1m,

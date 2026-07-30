@@ -3,7 +3,9 @@ import { getAuth } from 'firebase-admin/auth'
 import { FieldValue } from 'firebase-admin/firestore'
 import { planDefinition } from './plans'
 
-export const FREE_LIMIT = 10
+export const FREE_LIMIT = 5
+/** Lifetime max rewarded-ad bonuses per account (no reset). */
+export const AD_REWARD_LIFETIME_LIMIT = 3
 
 export function db() {
   return getFirestore()
@@ -72,6 +74,20 @@ export function remainingFor(data: DocumentData) {
   return Math.max(0, limit - used)
 }
 
+export function bonusCalculationsFor(data: DocumentData): number {
+  const n = data.bonusCalculations
+  return typeof n === 'number' && n > 0 ? Math.floor(n) : 0
+}
+
+export function adRewardsClaimedFor(data: DocumentData): number {
+  const n = data.adRewardsClaimed
+  return typeof n === 'number' && n > 0 ? Math.floor(n) : 0
+}
+
+export function adRewardsRemainingFor(data: DocumentData): number {
+  return Math.max(0, AD_REWARD_LIFETIME_LIMIT - adRewardsClaimedFor(data))
+}
+
 export function canCalculate(data: DocumentData) {
   if (hasQueuedPlan(data) && currentPeriodExhausted(data)) {
     // Queued plan will be promoted; treat as calculable after promote.
@@ -80,7 +96,14 @@ export function canCalculate(data: DocumentData) {
   if (data.plan === 'subscribed' && !isSubscriptionActive(data)) {
     return false
   }
-  return remainingFor(data) > 0
+  return remainingFor(data) > 0 || bonusCalculationsFor(data) > 0
+}
+
+/** Free user with no plan remaining and lifetime ad rewards left. */
+export function canClaimAdReward(data: DocumentData): boolean {
+  if (isSubscriptionActive(data) || hasQueuedPlan(data)) return false
+  if (remainingFor(data) > 0) return false
+  return adRewardsRemainingFor(data) > 0
 }
 
 export function clearQueueFields(): Record<string, null> {
@@ -190,6 +213,8 @@ export async function ensureUserDoc(uid: string) {
     queuedPaypalSubscriptionId: null,
     queuedPeriodEnd: null,
     cancelAtPeriodEnd: false,
+    bonusCalculations: 0,
+    adRewardsClaimed: 0,
     createdAt: FieldValue.serverTimestamp(),
   }
   await ref.set(created, { merge: true })
@@ -201,6 +226,10 @@ export function quotaPayload(data: DocumentData) {
   const normalized = normalizeUsage(data)
   const limit = effectiveLimit(normalized)
   const used = normalized.calculationsUsed ?? 0
+  const planRemaining = Math.max(0, limit - used)
+  const bonus = bonusCalculationsFor(normalized)
+  const adRewardsClaimed = adRewardsClaimedFor(normalized)
+  const adRewardsRemaining = adRewardsRemainingFor(normalized)
 
   return {
     plan:
@@ -215,7 +244,11 @@ export function quotaPayload(data: DocumentData) {
     cancelAtPeriodEnd: isCancelAtPeriodEnd(normalized),
     calculationsUsed: used,
     limit,
-    remaining: Math.max(0, limit - used),
+    remaining: planRemaining,
+    bonusCalculations: bonus,
+    adRewardsClaimed,
+    adRewardsRemaining,
+    canClaimAdReward: canClaimAdReward(normalized),
     canCalculate: canCalculate(normalized),
     periodEnd: normalized.periodEnd
       ? normalized.periodEnd.toDate().toISOString()

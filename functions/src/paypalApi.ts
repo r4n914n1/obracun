@@ -6,6 +6,7 @@ export const paypalWebhookId = defineSecret('PAYPAL_WEBHOOK_ID')
 export const paypalMode = defineString('PAYPAL_MODE', { default: 'sandbox' })
 export const appUrl = defineString('APP_URL', { default: 'https://transportcost.info/' })
 
+const paypalPlanLite1m = defineString('PAYPAL_PLAN_LITE_1M')
 const paypalPlanStarter1m = defineString('PAYPAL_PLAN_STARTER_1M')
 const paypalPlanStandard1m = defineString('PAYPAL_PLAN_STANDARD_1M')
 const paypalPlanPro1m = defineString('PAYPAL_PLAN_PRO_1M')
@@ -14,6 +15,7 @@ const paypalPlanStandard3m = defineString('PAYPAL_PLAN_STANDARD_3M')
 const paypalPlanPro3m = defineString('PAYPAL_PLAN_PRO_3M')
 
 const PAYPAL_PLAN_BY_APP: Record<string, ReturnType<typeof defineString>> = {
+  'lite-1m': paypalPlanLite1m,
   'starter-1m': paypalPlanStarter1m,
   'standard-1m': paypalPlanStandard1m,
   'pro-1m': paypalPlanPro1m,

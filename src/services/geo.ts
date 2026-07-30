@@ -21,6 +21,70 @@ export function haversineMeters(
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)))
 }
 
+export function polylineLengthMeters(coordinates: [number, number][]): number {
+  let sum = 0
+  for (let i = 1; i < coordinates.length; i++) {
+    sum += haversineMeters(coordinates[i - 1], coordinates[i])
+  }
+  return sum
+}
+
+/** Distance along a polyline to the nearest point on any segment. */
+export function distanceAlongPolyline(
+  coordinates: [number, number][],
+  point: [number, number],
+): number {
+  if (coordinates.length < 2) return 0
+  let bestDist = Infinity
+  let bestAlong = 0
+  let along = 0
+  for (let i = 1; i < coordinates.length; i++) {
+    const a = coordinates[i - 1]
+    const b = coordinates[i]
+    const segLen = haversineMeters(a, b)
+    const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+    const toMid = haversineMeters(point, mid)
+    const toA = haversineMeters(point, a)
+    const toB = haversineMeters(point, b)
+    const d = Math.min(toMid, toA, toB)
+    if (d < bestDist) {
+      bestDist = d
+      if (toA <= toB && toA <= toMid) bestAlong = along
+      else if (toB <= toA && toB <= toMid) bestAlong = along + segLen
+      else bestAlong = along + segLen / 2
+    }
+    along += segLen
+  }
+  return bestAlong
+}
+
+/** Point at a fraction (0–1) of the polyline length. */
+export function pointAlongPolyline(
+  coordinates: [number, number][],
+  fraction: number,
+): [number, number] | null {
+  if (coordinates.length === 0) return null
+  if (coordinates.length === 1) return coordinates[0]
+
+  const total = polylineLengthMeters(coordinates)
+  if (total <= 0) return coordinates[0]
+
+  const target = Math.min(1, Math.max(0, fraction)) * total
+  let along = 0
+  for (let i = 1; i < coordinates.length; i++) {
+    const a = coordinates[i - 1]
+    const b = coordinates[i]
+    const segLen = haversineMeters(a, b)
+    if (along + segLen >= target || i === coordinates.length - 1) {
+      if (segLen <= 0) return b
+      const t = Math.min(1, Math.max(0, (target - along) / segLen))
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+    }
+    along += segLen
+  }
+  return coordinates[coordinates.length - 1]
+}
+
 /** Approximate local ENU meters relative to origin */
 function toLocalMeters(
   origin: [number, number],

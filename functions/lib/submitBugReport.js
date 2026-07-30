@@ -6,10 +6,11 @@ const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const resendApiKey = (0, params_1.defineSecret)('RESEND_API_KEY');
 const supportEmail = (0, params_1.defineString)('SUPPORT_EMAIL', {
-    default: 'support@transportcost.info',
+    // Until transportcost.info is Verified in Resend, only the account email can receive.
+    default: 'r4n914n1@gmail.com',
 });
 const mailFrom = (0, params_1.defineString)('MAIL_FROM', {
-    default: 'Transport Cost <noreply@transportcost.info>',
+    default: 'Transport Cost <onboarding@resend.dev>',
 });
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function parsePayload(data) {
@@ -42,13 +43,26 @@ async function sendWithResend(apiKey, from, to, replyTo, message) {
             to: [to],
             reply_to: replyTo,
             subject: `[Bug report] ${replyTo}`,
-            text: message,
+            text: [
+                `Reply-To / korisnik: ${replyTo}`,
+                '',
+                message,
+            ].join('\n'),
         }),
     });
     if (!response.ok) {
         const body = await response.text();
         console.error('Resend error', response.status, body);
-        throw new https_1.HttpsError('internal', 'Failed to send email.');
+        let detail = 'Failed to send email.';
+        try {
+            const parsed = JSON.parse(body);
+            if (parsed.message)
+                detail = parsed.message;
+        }
+        catch {
+            // keep default
+        }
+        throw new https_1.HttpsError('internal', detail);
     }
 }
 exports.submitBugReport = (0, https_1.onCall)({ secrets: [resendApiKey] }, async (request) => {
@@ -64,7 +78,23 @@ exports.submitBugReport = (0, https_1.onCall)({ secrets: [resendApiKey] }, async
             ? request.rawRequest.headers['user-agent']
             : null,
     });
-    await sendWithResend(resendApiKey.value(), mailFrom.value(), supportEmail.value(), email, message);
+    const apiKey = resendApiKey.value().trim();
+    if (!apiKey || apiKey === 'placeholder-not-configured') {
+        console.error('RESEND_API_KEY is missing or placeholder');
+        throw new https_1.HttpsError('failed-precondition', 'E-mail slanje nije podešeno (Resend API key). Prijava je sačuvana u bazi.');
+    }
+    try {
+        await sendWithResend(apiKey, mailFrom.value(), supportEmail.value(), email, message);
+    }
+    catch (err) {
+        console.error(err);
+        const detail = err instanceof https_1.HttpsError && err.message
+            ? err.message
+            : 'Prijava je sačuvana, ali slanje e-maila nije uspelo. Proveri Resend API key / domen.';
+        throw new https_1.HttpsError('internal', detail.startsWith('Prijava')
+            ? detail
+            : `Prijava je sačuvana, ali slanje e-maila nije uspelo: ${detail}`);
+    }
     return { ok: true };
 });
 //# sourceMappingURL=submitBugReport.js.map

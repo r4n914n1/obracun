@@ -1,18 +1,21 @@
-import { useRef } from 'react'
 import type {
   EmissionClass,
   ForeignTollRates,
   Location,
+  MapPickTarget,
+  StopSlot,
   VehicleMode,
 } from '../types'
 import {
   EMISSION_CLASS_OPTIONS,
+  isSameMapPickTarget,
   MAX_INTERMEDIATE_STOPS,
   VEHICLE_MODE_VALUES,
 } from '../types'
 import { useLocale } from '../i18n/LocaleContext'
 import type { MessageKey } from '../i18n/messages'
 import { PlaceInput } from './PlaceInput'
+import { useRef, useState, type DragEvent } from 'react'
 
 const VEHICLE_COPY: Record<
   VehicleMode,
@@ -27,7 +30,7 @@ const VEHICLE_COPY: Record<
 interface RouteFormProps {
   origin: Location | null
   destination: Location | null
-  stops: Array<Location | null>
+  stops: StopSlot[]
   vehicleMode: VehicleMode
   consumption: number
   fuelPrice: number
@@ -48,6 +51,8 @@ interface RouteFormProps {
   onStopChange: (index: number, location: Location | null) => void
   onAddStop: () => void
   onRemoveStop: (index: number) => void
+  onReorderStops: (fromIndex: number, toIndex: number) => void
+  onSwapOriginDestination: () => void
   onVehicleModeChange: (mode: VehicleMode) => void
   onConsumptionChange: (value: number) => void
   onFuelPriceChange: (value: number) => void
@@ -62,6 +67,11 @@ interface RouteFormProps {
     value: number,
   ) => void
   onSubmit: () => void
+  routeInputsLocked?: boolean
+  onRequireAuth?: () => void
+  mapPickTarget?: MapPickTarget | null
+  onMapPickRequest?: (target: MapPickTarget) => void
+  mapPickingBusy?: boolean
 }
 
 export function RouteForm({
@@ -88,6 +98,8 @@ export function RouteForm({
   onStopChange,
   onAddStop,
   onRemoveStop,
+  onReorderStops,
+  onSwapOriginDestination,
   onVehicleModeChange,
   onConsumptionChange,
   onFuelPriceChange,
@@ -98,24 +110,71 @@ export function RouteForm({
   onVehicleHeightChange,
   onTollRateChange,
   onSubmit,
+  routeInputsLocked = false,
+  onRequireAuth,
+  mapPickTarget = null,
+  onMapPickRequest,
+  mapPickingBusy = false,
 }: RouteFormProps) {
   const { t, countryName } = useLocale()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dropIndex, setDropIndex] = useState<number | null>(null)
   const tollRateEntries = Object.entries(tollRates)
-  const incompleteStops = stops.some((stop) => stop === null)
+  const incompleteStops = stops.some((stop) => stop.location === null)
   const missing: string[] = []
   if (!origin) missing.push('A')
   if (!destination) missing.push('B')
   if (incompleteStops) missing.push('stop')
 
-  const busy = loading || importing
+  const busy = loading || importing || mapPickingBusy
   const canSubmit = missing.length === 0 && !busy
+
+  function requestMapPick(target: MapPickTarget) {
+    if (routeInputsLocked) {
+      onRequireAuth?.()
+      return
+    }
+    onMapPickRequest?.(target)
+  }
+
+  function isPickActive(target: MapPickTarget): boolean {
+    return mapPickTarget != null && isSameMapPickTarget(mapPickTarget, target)
+  }
+
+  function handleDragStart(index: number) {
+    setDragIndex(index)
+  }
+
+  function handleDragOver(event: DragEvent, index: number) {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (dragIndex == null || dragIndex === index) return
+    setDropIndex(index)
+  }
+
+  function handleDrop(index: number) {
+    if (dragIndex != null && dragIndex !== index) {
+      onReorderStops(dragIndex, index)
+    }
+    setDragIndex(null)
+    setDropIndex(null)
+  }
+
+  function handleDragEnd() {
+    setDragIndex(null)
+    setDropIndex(null)
+  }
 
   return (
     <form
       className="route-form"
       onSubmit={(event) => {
         event.preventDefault()
+        if (routeInputsLocked) {
+          onRequireAuth?.()
+          return
+        }
         if (canSubmit) onSubmit()
       }}
     >
@@ -135,8 +194,8 @@ export function RouteForm({
         <button
           type="button"
           className="btn btn-secondary btn-sm"
-          disabled={busy || !onImportCsv}
-          title={t('csvImportTitle')}
+          disabled={busy || !onImportCsv || routeInputsLocked}
+          title={routeInputsLocked ? t('placeLoginRequired') : t('csvImportTitle')}
           onClick={() => fileInputRef.current?.click()}
         >
           {importing ? t('csvImporting') : t('csvImport')}
@@ -144,80 +203,191 @@ export function RouteForm({
       </div>
 
       <div className="form-compact">
-        <PlaceInput
-          label={t('originLabel')}
-          placeholder={t('placePlaceholder')}
-          value={origin}
-          onChange={onOriginChange}
-        />
-
-        <div className="stops-compact">
-          <div className="stops-header">
-            <span className="field-label">
-              {t('stopsLabel', { max: MAX_INTERMEDIATE_STOPS })}
+        <div className="waypoint-list" data-tour="route">
+          <div className="waypoint-row">
+            <span className="waypoint-rail" aria-hidden />
+            <span className="waypoint-badge waypoint-badge-a" aria-hidden>
+              A
             </span>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={onAddStop}
-              disabled={busy || stops.length >= MAX_INTERMEDIATE_STOPS}
-              title={
-                stops.length >= MAX_INTERMEDIATE_STOPS
-                  ? t('maxStopsTitle', { max: MAX_INTERMEDIATE_STOPS })
-                  : t('addStopTitle')
-              }
-            >
-              {t('addStop')}
-            </button>
-          </div>
-          {stops.map((stop, index) => (
-            <div className="stop-row" key={`stop-${index}`}>
+            <div className="waypoint-field">
               <PlaceInput
-                label={t('stopN', { n: index + 1 })}
+                label={t('originLabel')}
                 placeholder={t('placePlaceholder')}
-                value={stop}
-                onChange={(location) => onStopChange(index, location)}
+                value={origin}
+                onChange={onOriginChange}
+                compact
+                locked={routeInputsLocked}
+                onLockedInteract={onRequireAuth}
               />
+            </div>
+            <div className="waypoint-actions">
               <button
                 type="button"
-                className="btn btn-danger btn-sm-square"
-                onClick={() => onRemoveStop(index)}
-                aria-label={t('removeStop', { n: index + 1 })}
-                title={t('delete')}
+                className={`waypoint-icon-btn waypoint-icon-btn-pin${isPickActive({ kind: 'origin' }) ? ' is-active' : ''}`}
+                onClick={() => requestMapPick({ kind: 'origin' })}
+                disabled={busy}
+                title={t('mapPickOriginTitle')}
+                aria-label={t('mapPickOriginTitle')}
+                aria-pressed={isPickActive({ kind: 'origin' })}
               >
-                X
+                📍
+              </button>
+              <button
+                type="button"
+                className="waypoint-icon-btn"
+                onClick={onSwapOriginDestination}
+                disabled={busy || routeInputsLocked || (!origin && !destination)}
+                title={t('swapEndsTitle')}
+                aria-label={t('swapEndsTitle')}
+              >
+                ⇅
               </button>
             </div>
-          ))}
-        </div>
+          </div>
 
-        <div className="destination-row">
+          {stops.map((stop, index) => (
+            <div
+              className={`waypoint-row${dragIndex === index ? ' is-dragging' : ''}${dropIndex === index ? ' is-drop-target' : ''}`}
+              key={stop.id}
+              onDragOver={(event) => handleDragOver(event, index)}
+              onDrop={() => handleDrop(index)}
+              onDragEnd={handleDragEnd}
+            >
+              <button
+                type="button"
+                className="waypoint-handle"
+                draggable={!busy && !routeInputsLocked}
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = 'move'
+                  handleDragStart(index)
+                }}
+                aria-label={t('reorderStop', { n: index + 1 })}
+                title={t('reorderStopTitle')}
+                disabled={busy || routeInputsLocked}
+              >
+                ⋮⋮
+              </button>
+              <span className="waypoint-badge" aria-hidden>
+                {index + 1}
+              </span>
+              <div className="waypoint-field">
+                <PlaceInput
+                  label={t('stopN', { n: index + 1 })}
+                  placeholder={t('placePlaceholder')}
+                  value={stop.location}
+                  onChange={(location) => onStopChange(index, location)}
+                  compact
+                  locked={routeInputsLocked}
+                  onLockedInteract={onRequireAuth}
+                />
+              </div>
+              <div className="waypoint-actions">
+                <button
+                  type="button"
+                  className={`waypoint-icon-btn waypoint-icon-btn-pin${isPickActive({ kind: 'stop', index }) ? ' is-active' : ''}`}
+                  onClick={() => requestMapPick({ kind: 'stop', index })}
+                  disabled={busy}
+                  title={t('mapPickStopTitle', { n: index + 1 })}
+                  aria-label={t('mapPickStopTitle', { n: index + 1 })}
+                  aria-pressed={isPickActive({ kind: 'stop', index })}
+                >
+                  📍
+                </button>
+                <button
+                  type="button"
+                  className="waypoint-icon-btn waypoint-icon-btn-up"
+                  disabled={busy || routeInputsLocked || index === 0}
+                  onClick={() => onReorderStops(index, index - 1)}
+                  aria-label={t('moveStopUp', { n: index + 1 })}
+                  title={t('moveStopUpTitle')}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="waypoint-icon-btn waypoint-icon-btn-down"
+                  disabled={busy || routeInputsLocked || index >= stops.length - 1}
+                  onClick={() => onReorderStops(index, index + 1)}
+                  aria-label={t('moveStopDown', { n: index + 1 })}
+                  title={t('moveStopDownTitle')}
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  className="waypoint-icon-btn waypoint-icon-btn-danger"
+                  disabled={busy || routeInputsLocked}
+                  onClick={() => onRemoveStop(index)}
+                  aria-label={t('removeStop', { n: index + 1 })}
+                  title={t('delete')}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <div className="waypoint-row">
+            <span className="waypoint-rail" aria-hidden />
+            <span className="waypoint-badge waypoint-badge-b" aria-hidden>
+              B
+            </span>
+            <div className="waypoint-field">
+              <PlaceInput
+                label={t('destinationLabel')}
+                placeholder={t('placePlaceholder')}
+                value={destination}
+                onChange={onDestinationChange}
+                compact
+                locked={routeInputsLocked}
+                onLockedInteract={onRequireAuth}
+              />
+            </div>
+            <div className="waypoint-actions">
+              <button
+                type="button"
+                className={`waypoint-icon-btn waypoint-icon-btn-pin${isPickActive({ kind: 'destination' }) ? ' is-active' : ''}`}
+                onClick={() => requestMapPick({ kind: 'destination' })}
+                disabled={busy}
+                title={t('mapPickDestinationTitle')}
+                aria-label={t('mapPickDestinationTitle')}
+                aria-pressed={isPickActive({ kind: 'destination' })}
+              >
+                📍
+              </button>
+            </div>
+          </div>
+
+          <div className="waypoint-return-row">
+            <button
+              type="button"
+              className={`waypoint-return${returnTrip ? ' is-on' : ''}`}
+              aria-pressed={returnTrip}
+              title={returnTrip ? t('returnOnTitle') : t('returnOffTitle')}
+              disabled={busy || routeInputsLocked}
+              onClick={() => onReturnTripChange?.(!returnTrip)}
+            >
+              <span aria-hidden>⇄</span>
+              <span>{returnTrip ? t('returnOn') : t('returnOff')}</span>
+            </button>
+          </div>
+
           <button
             type="button"
-            className={`return-toggle${returnTrip ? ' is-on' : ''}`}
-            aria-pressed={returnTrip}
-            title={returnTrip ? t('returnOnTitle') : t('returnOffTitle')}
-            disabled={busy}
-            onClick={() => onReturnTripChange?.(!returnTrip)}
+            className="waypoint-add"
+            onClick={onAddStop}
+            disabled={busy || routeInputsLocked || stops.length >= MAX_INTERMEDIATE_STOPS}
+            title={
+              stops.length >= MAX_INTERMEDIATE_STOPS
+                ? t('maxStopsTitle', { max: MAX_INTERMEDIATE_STOPS })
+                : t('addStopTitle')
+            }
           >
-            <span className="return-toggle-icon" aria-hidden>
-              ⇄
-            </span>
-            <span className="return-toggle-text">
-              {returnTrip ? t('returnOn') : t('returnOff')}
-            </span>
+            {t('addStop')}
           </button>
-          <div className="destination-field">
-            <PlaceInput
-              label={t('destinationLabel')}
-              placeholder={t('placePlaceholder')}
-              value={destination}
-              onChange={onDestinationChange}
-            />
-          </div>
         </div>
 
-        <div className="vehicle-block">
+        <div className="vehicle-block" data-tour="vehicle">
           <span className="field-label">{t('vehicleLabel')}</span>
           <div className="vehicle-grid">
             {VEHICLE_MODE_VALUES.map((mode) => {
@@ -237,7 +407,7 @@ export function RouteForm({
           </div>
         </div>
 
-        <div className="cost-settings">
+        <div className="cost-settings" data-tour="costs">
           <span className="field-label">{t('costSettings')}</span>
           <div className="cost-settings-row">
             <label className="cost-field">
@@ -348,11 +518,16 @@ export function RouteForm({
           <p className="cost-settings-hint">{t('advancedHint')}</p>
         </details>
 
-        {!canSubmit && !busy ? (
+        {!canSubmit && !busy && !routeInputsLocked ? (
           <p className="todo-line">{t('missing', { list: missing.join(', ') })}</p>
         ) : null}
 
-        <button type="submit" className="btn btn-primary btn-xl" disabled={!canSubmit}>
+        <button
+          type="submit"
+          className="btn btn-primary btn-xl"
+          data-tour="calculate"
+          disabled={busy || (!routeInputsLocked && !canSubmit)}
+        >
           {importing
             ? t('csvImporting')
             : loading
@@ -360,7 +535,11 @@ export function RouteForm({
               : t('calculate')}
         </button>
 
-        <details className="cost-settings toll-rates-editor" open={isTruck}>
+        <details
+          className="cost-settings toll-rates-editor"
+          data-tour="foreign-rates"
+          open={isTruck}
+        >
           <summary className="field-label">{t('foreignRatesTitle')}</summary>
           <p className="cost-settings-hint">{t('foreignRatesHint')}</p>
           <div className="toll-rates-table toll-rates-table-wide">
