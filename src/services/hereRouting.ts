@@ -17,11 +17,24 @@ import {
 import {
   classifyForeignTollKind,
   foreignTollDisplayName,
+  foreignVignetteKey,
+  resolveVignetteValidDays,
 } from './tollClassification'
 
 interface HerePrice {
   currency?: string
   value?: number
+}
+
+interface HereFarePass {
+  returnJourney?: boolean
+  travels?: number
+  transfers?: number
+  seniorPass?: boolean
+  validityPeriod?: {
+    periodType?: string
+    count?: number | null
+  }
 }
 
 interface HereFare {
@@ -31,6 +44,8 @@ interface HereFare {
   convertedPrice?: HerePrice
   reason?: string
   paymentMethods?: string[]
+  pass?: HereFarePass
+  applicableTimes?: string
 }
 
 interface HereToll {
@@ -349,6 +364,7 @@ function summarizeForeignTolls(
       kind: ForeignTollFare['kind']
       eur: number
       paymentMethod: string | null
+      validDays: number | null
     }> = []
 
     for (const toll of sectionTolls) {
@@ -357,9 +373,6 @@ function summarizeForeignTolls(
 
       const fare = pickFare(toll.fares ?? [])
       if (!fare || !fare.id) continue
-
-      const dedupeKey = `${fare.id}::${routeLegLabel ?? `section:${sectionIndex}`}`
-      if (chosen.has(dedupeKey)) continue
 
       const eur = fareEur(fare)
       if (eur == null) {
@@ -372,7 +385,23 @@ function summarizeForeignTolls(
         PAYMENT_PRIORITY.find((m) => methods.includes(m)) ?? methods[0] ?? null
       const systemName = toll.tollSystem ?? ''
       const fareName = fare.name ?? systemName ?? country
-      const kind = classifyForeignTollKind(fareName, systemName)
+      const kind = classifyForeignTollKind(fareName, systemName, fare.reason)
+
+      // Vignettes are time-based: one purchase covers the whole trip (and return).
+      const dedupeKey =
+        kind === 'vignette'
+          ? `vignette::${foreignVignetteKey({
+              country,
+              system: systemName,
+              name: fareName,
+            })}`
+          : `${fare.id}::${routeLegLabel ?? `section:${sectionIndex}`}`
+      if (chosen.has(dedupeKey)) continue
+
+      const validDays =
+        kind === 'vignette'
+          ? resolveVignetteValidDays(fareName, systemName, fare.pass)
+          : null
 
       pending.push({
         dedupeKey,
@@ -382,6 +411,7 @@ function summarizeForeignTolls(
         kind,
         eur,
         paymentMethod,
+        validDays,
       })
     }
 
@@ -437,6 +467,7 @@ function summarizeForeignTolls(
           eur: item.eur,
           paymentMethod: item.paymentMethod,
           kind: item.kind,
+          validDays: item.validDays,
           routeLegLabel,
           lat: point?.[0] ?? null,
           lng: point?.[1] ?? null,
@@ -648,16 +679,28 @@ function mergeForeignTollSummaries(
   inbound: ForeignTollSummary,
   outboundDistanceMeters: number,
 ): ForeignTollSummary {
-  const fares = [
-    ...outbound.fares,
-    ...inbound.fares.map((fare) => ({
+  const seenVignettes = new Set<string>()
+  const merged: ForeignTollFare[] = []
+
+  const pushFare = (fare: ForeignTollFare, progressOffset: number) => {
+    if (fare.kind === 'vignette') {
+      const key = foreignVignetteKey(fare)
+      if (seenVignettes.has(key)) return
+      seenVignettes.add(key)
+    }
+    merged.push({
       ...fare,
       progressMeters:
         fare.progressMeters != null
-          ? fare.progressMeters + outboundDistanceMeters
+          ? fare.progressMeters + progressOffset
           : fare.progressMeters,
-    })),
-  ].map((fare, index) => ({ ...fare, sequence: index + 1 }))
+    })
+  }
+
+  for (const fare of outbound.fares) pushFare(fare, 0)
+  for (const fare of inbound.fares) pushFare(fare, outboundDistanceMeters)
+
+  const fares = merged.map((fare, index) => ({ ...fare, sequence: index + 1 }))
 
   const byCountryMap = new Map<string, number>()
   for (const fare of fares) {

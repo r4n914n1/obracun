@@ -411,6 +411,11 @@ export function ResultPanel({
         if (item.fare.system && item.fare.system !== item.fare.name) {
           detailParts.push(item.fare.system)
         }
+        if (item.fare.kind === 'vignette' && item.fare.validDays != null) {
+          detailParts.push(
+            t('vignetteValidDays', { days: item.fare.validDays }),
+          )
+        }
         if (item.fare.discountPercent > 0) {
           detailParts.push(t('discountPct', { pct: item.fare.discountPercent }))
         }
@@ -421,7 +426,11 @@ export function ResultPanel({
         }
         return {
           tag: `${item.fare.country} · ${
-            item.fare.kind === 'tunnel' ? t('tunnel') : t('toll')
+            item.fare.kind === 'tunnel'
+              ? t('tunnel')
+              : item.fare.kind === 'vignette'
+                ? t('vignette')
+                : t('toll')
           }`,
           price: formatEur(item.fare.netEur),
           main: item.fare.name,
@@ -601,10 +610,20 @@ export function ResultPanel({
                   <div className="result-card-top">
                     <span className="result-card-tag">
                       {item.fare.country} ·{' '}
-                      {item.fare.kind === 'tunnel' ? t('tunnel') : t('toll')}
+                      {item.fare.kind === 'tunnel'
+                        ? t('tunnel')
+                        : item.fare.kind === 'vignette'
+                          ? t('vignette')
+                          : t('toll')}
                     </span>
                     <strong className="result-card-price">
                       {formatEur(item.fare.netEur)}
+                      {item.fare.kind === 'vignette' &&
+                      item.fare.validDays != null
+                        ? ` · ${t('vignetteValidDays', {
+                            days: item.fare.validDays,
+                          })}`
+                        : ''}
                     </strong>
                   </div>
                   <p className="result-card-main">{item.fare.name}</p>

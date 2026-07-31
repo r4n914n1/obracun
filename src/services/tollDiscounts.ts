@@ -14,6 +14,7 @@ export interface AdjustedFare {
   netEur: number
   discountPercent: number
   vatPercent: number
+  validDays: number | null
   routeLegLabel: string | null
   lat: number | null
   lng: number | null
@@ -111,6 +112,7 @@ export function adjustForeignTolls(
       netEur,
       discountPercent,
       vatPercent,
+      validDays: fare.validDays,
       routeLegLabel: fare.routeLegLabel,
       lat: fare.lat,
       lng: fare.lng,

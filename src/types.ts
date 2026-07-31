@@ -63,7 +63,9 @@ export interface ForeignTollFare {
   name: string
   eur: number
   paymentMethod: string | null
-  kind: 'toll' | 'tunnel'
+  kind: 'toll' | 'tunnel' | 'vignette'
+  /** For vignettes: validity length in days when known (from HERE pass / name). */
+  validDays: number | null
   /** Route segment A → B where HERE reported this toll (when known). */
   routeLegLabel: string | null
   /** Approximate map position for chronological ordering along the route. */
