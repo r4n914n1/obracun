@@ -163,6 +163,7 @@ const sr = {
     'Utiče na putarine van Srbije (HERE). Osovine i visina se koriste za kamione.',
   missing: 'Fali: {list}',
   calculate: 'IZRAČUNAJ',
+  calculateLoginRequired: 'Prijavi se Google nalogom da računaš rutu',
   calculatingBtn: 'Računam…',
   foreignRatesTitle: 'Strane putarine — PDV i popust (kamioni)',
   foreignRatesHint:
@@ -523,6 +524,7 @@ const en: { [K in MessageKey]: string } = {
     'Affects tolls outside Serbia (HERE). Axles and height are used for trucks.',
   missing: 'Missing: {list}',
   calculate: 'CALCULATE',
+  calculateLoginRequired: 'Sign in with Google to calculate a route',
   calculatingBtn: 'Calculating…',
   foreignRatesTitle: 'Foreign tolls — VAT and discount (trucks)',
   foreignRatesHint:

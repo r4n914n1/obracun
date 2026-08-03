@@ -225,9 +225,17 @@ export function RouteForm({
                 type="button"
                 className={`waypoint-icon-btn waypoint-icon-btn-pin${isPickActive({ kind: 'origin' }) ? ' is-active' : ''}`}
                 onClick={() => requestMapPick({ kind: 'origin' })}
-                disabled={busy}
-                title={t('mapPickOriginTitle')}
-                aria-label={t('mapPickOriginTitle')}
+                disabled={busy || routeInputsLocked}
+                title={
+                  routeInputsLocked
+                    ? t('placeLoginRequired')
+                    : t('mapPickOriginTitle')
+                }
+                aria-label={
+                  routeInputsLocked
+                    ? t('placeLoginRequired')
+                    : t('mapPickOriginTitle')
+                }
                 aria-pressed={isPickActive({ kind: 'origin' })}
               >
                 📍
@@ -286,9 +294,17 @@ export function RouteForm({
                   type="button"
                   className={`waypoint-icon-btn waypoint-icon-btn-pin${isPickActive({ kind: 'stop', index }) ? ' is-active' : ''}`}
                   onClick={() => requestMapPick({ kind: 'stop', index })}
-                  disabled={busy}
-                  title={t('mapPickStopTitle', { n: index + 1 })}
-                  aria-label={t('mapPickStopTitle', { n: index + 1 })}
+                  disabled={busy || routeInputsLocked}
+                  title={
+                    routeInputsLocked
+                      ? t('placeLoginRequired')
+                      : t('mapPickStopTitle', { n: index + 1 })
+                  }
+                  aria-label={
+                    routeInputsLocked
+                      ? t('placeLoginRequired')
+                      : t('mapPickStopTitle', { n: index + 1 })
+                  }
                   aria-pressed={isPickActive({ kind: 'stop', index })}
                 >
                   📍
@@ -348,9 +364,17 @@ export function RouteForm({
                 type="button"
                 className={`waypoint-icon-btn waypoint-icon-btn-pin${isPickActive({ kind: 'destination' }) ? ' is-active' : ''}`}
                 onClick={() => requestMapPick({ kind: 'destination' })}
-                disabled={busy}
-                title={t('mapPickDestinationTitle')}
-                aria-label={t('mapPickDestinationTitle')}
+                disabled={busy || routeInputsLocked}
+                title={
+                  routeInputsLocked
+                    ? t('placeLoginRequired')
+                    : t('mapPickDestinationTitle')
+                }
+                aria-label={
+                  routeInputsLocked
+                    ? t('placeLoginRequired')
+                    : t('mapPickDestinationTitle')
+                }
                 aria-pressed={isPickActive({ kind: 'destination' })}
               >
                 📍
@@ -526,7 +550,14 @@ export function RouteForm({
           type="submit"
           className="btn btn-primary btn-xl"
           data-tour="calculate"
-          disabled={busy || (!routeInputsLocked && !canSubmit)}
+          disabled={busy || routeInputsLocked || !canSubmit}
+          title={
+            routeInputsLocked
+              ? t('calculateLoginRequired')
+              : !canSubmit
+                ? t('missing', { list: missing.join(', ') })
+                : undefined
+          }
         >
           {importing
             ? t('csvImporting')

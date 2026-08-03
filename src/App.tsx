@@ -334,6 +334,12 @@ export default function App() {
     via: Location[],
     roundTrip: boolean = returnTrip,
   ): Promise<void> {
+    // Guard before any HERE / billing calls — avoids burning API then wiping results.
+    if (!isAuthenticated()) {
+      setLoginOpen(true)
+      return
+    }
+
     setLoading(true)
     setError(null)
 

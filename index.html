@@ -1,16 +1,74 @@
 <!doctype html>
 <html lang="sr">
   <head>
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18346625131"></script>
+    <!-- Google Consent Mode v2 + Google tag (gtag.js) -->
     <script>
       window.dataLayer = window.dataLayer || []
       function gtag() {
         dataLayer.push(arguments)
       }
+
+      // Rest of world (incl. Serbia): granted by default
+      gtag('consent', 'default', {
+        ad_storage: 'granted',
+        ad_user_data: 'granted',
+        ad_personalization: 'granted',
+        analytics_storage: 'granted',
+      })
+
+      // EEA + UK + CH: denied until Google CMP / Privacy & messaging updates
+      gtag('consent', 'default', {
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+        analytics_storage: 'denied',
+        wait_for_update: 500,
+        region: [
+          'AT',
+          'BE',
+          'BG',
+          'HR',
+          'CY',
+          'CZ',
+          'DK',
+          'EE',
+          'FI',
+          'FR',
+          'DE',
+          'GR',
+          'HU',
+          'IS',
+          'IE',
+          'IT',
+          'LV',
+          'LI',
+          'LT',
+          'LU',
+          'MT',
+          'NL',
+          'NO',
+          'PL',
+          'PT',
+          'RO',
+          'SK',
+          'SI',
+          'ES',
+          'SE',
+          'GB',
+          'CH',
+        ],
+      })
+
+      gtag('set', 'ads_data_redaction', true)
+      gtag('set', 'url_passthrough', true)
+
       gtag('js', new Date())
       gtag('config', 'AW-18346625131')
     </script>
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=AW-18346625131"
+    ></script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
